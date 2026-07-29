@@ -1,4 +1,5 @@
-
+﻿
+using JetBrains.Annotations;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
@@ -34,9 +35,33 @@ public class BusStation : MonoBehaviour
         int laneCount = busLanes.Length;
         int ticketIndex = 0;
 
+        // Nếu bus đầu tiên trong garage trùng màu với bus parking
+        // thì đổi với lane khác nếu có thể.
+        for (int i = 0; i < laneCount; i++)
+        {
+            int garageIndex = laneCount + i;
+
+            if (garageIndex >= ticketQueue.Count)
+                break;
+
+            if (ticketQueue[i].passengerColor != ticketQueue[garageIndex].passengerColor)
+                continue;
+
+            for (int j = garageIndex + 1; j < ticketQueue.Count; j++)
+            {
+                if (ticketQueue[j].passengerColor != ticketQueue[i].passengerColor)
+                {
+                    (ticketQueue[garageIndex], ticketQueue[j]) =
+                        (ticketQueue[j], ticketQueue[garageIndex]);
+
+                    break;
+                }
+            }
+        }
+
         // Pha 1 : spawn tai vi tri parking
 
-        for(int i = 0; i < laneCount && ticketIndex < ticketQueue.Count; i++)
+        for (int i = 0; i < laneCount && ticketIndex < ticketQueue.Count; i++)
         {
             BusLane lane = busLanes[i];
 
@@ -123,25 +148,34 @@ public class BusStation : MonoBehaviour
             perColorQueues.Add(q);
         }
 
-        List<BusTicket> tickets = new List<BusTicket>();
+        List<BusTicket> parkingTickets = new();
+        List<BusTicket> garageTickets = new();
 
-        bool hasMore = true;
+        // Bus dau tien cua moi mau -> parking
 
-        while (hasMore)
+        foreach (Queue<BusTicket> q in perColorQueues)
         {
-            hasMore = false;
-
-            foreach(var q in perColorQueues)
+            if(q.Count > 0)
             {
-                if(q.Count > 0)
-                {
-                    tickets.Add(q.Dequeue());
-                    hasMore = true;
-                }
+                parkingTickets.Add(q.Dequeue());
             }
         }
 
-        return tickets;
+        // Cac bus con lai -> garage
+        foreach (Queue<BusTicket> q in perColorQueues)
+        {
+            while (q.Count > 0)
+            {
+                garageTickets.Add(q.Dequeue());
+            }
+        }
+
+        Shuffle(garageTickets);
+
+        parkingTickets.AddRange(garageTickets);
+
+        return parkingTickets;
+
     }
 
     Bus SpawnBus(BusTicket ticket,Vector3 position,Transform parent)
@@ -153,6 +187,16 @@ public class BusStation : MonoBehaviour
         bus.SetCapacity(ticket.capacity);
 
         return bus;
+    }
+
+    void Shuffle<T>(List<T> list)
+    {
+        for(int i = 0; i < list.Count - 1; i++)
+        {
+            int j = Random.Range(0, i + 1);
+
+            (list[i], list[j]) = (list[j], list[i]);
+        }
     }
 
     public void RegisterParkingBus(Bus bus)
