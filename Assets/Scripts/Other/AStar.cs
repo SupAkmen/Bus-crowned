@@ -56,7 +56,7 @@ public class AStar : MonoBehaviour
 
                 if(!neighbour.walkable && neighbour != targetNode) continue;
 
-                //if (neighbour.reservedBy != null && neighbour.reservedBy != currentPassenger && neighbour != targetNode) continue;
+                if (neighbour.reservedBy != null && neighbour.reservedBy != currentPassenger && neighbour != targetNode) continue;
 
                 if(closedList.Contains(neighbour)) continue;
 
@@ -72,10 +72,10 @@ public class AStar : MonoBehaviour
                 // Gio chuyen thanh phi phat de uu tien tranh, nhung van cho phep di qua
                 // (giong nguoi ta xep hang di theo sau nhau ngoai doi thuc)
 
-                if (neighbour.reservedBy != null && neighbour.reservedBy != currentPassenger && neighbour != targetNode)
-                {
-                    congestion += 30;
-                }    
+                //if (neighbour.reservedBy != null && neighbour.reservedBy != currentPassenger && neighbour != targetNode)
+                //{
+                //    congestion += 30;
+                //}    
 
                 int newCost = currentNode.gCost + GetDistance(currentNode, neighbour) + congestion;
 

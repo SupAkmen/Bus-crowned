@@ -165,7 +165,7 @@ public class Passenger : MonoBehaviour
         // Chiem cac o trong cua so con trong hoac dang la cua chinh minh
         foreach(GridNode node in desired)
         {
-            if(node.reservedBy == null || node.reservedBy == this)
+            if(node.reservedBy == null && node.reservedBy == this)
             {
                 node.reservedBy = this;
             }
