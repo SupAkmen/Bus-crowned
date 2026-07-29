@@ -1,4 +1,5 @@
 
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -7,6 +8,9 @@ public class BusStation : MonoBehaviour
     public static BusStation instance;
 
     public BusLane[] busLanes;
+
+    [Header("Spawn")]
+    [SerializeField] public Bus busPrefab;
 
     // The list of car in parking 
     [HideInInspector] public List<Bus> parkingBusList = new List<Bus>();
@@ -17,14 +21,140 @@ public class BusStation : MonoBehaviour
     }
     private void Start()
     {
-        foreach (var lane in busLanes)
+        StartCoroutine(InitializeBusesRoutine());
+    }
+
+    IEnumerator InitializeBusesRoutine()
+    {
+        // Cho mot frame de tat ca Passenger da spawn and register xong truoc khi dem so luong
+        yield return null;
+
+        List<BusTicket> ticketQueue = BuiltBusTicketQueue();
+
+        int laneCount = busLanes.Length;
+        int ticketIndex = 0;
+
+        // Pha 1 : spawn tai vi tri parking
+
+        for(int i = 0; i < laneCount && ticketIndex < ticketQueue.Count; i++)
         {
-            if (lane.parkingBus != null)
+            BusLane lane = busLanes[i];
+
+            Bus bus = SpawnBus(ticketQueue[ticketIndex], lane.parkingPosition.position + new Vector3(0,0.63f,0), lane.transform);
+
+            lane.SetParkingBus(bus);
+            RegisterParkingBus(bus);
+
+            ticketIndex++;
+        }
+
+        // Pha 2 : Spawn bus con lai chia deu (round-robin) vao garage cua tung lane
+
+        int[] garaFillIndex = new int[laneCount];
+
+        while(ticketIndex < ticketQueue.Count)
+        {
+            bool spawnedAny = false;
+
+            for (int i = 0; i < laneCount && ticketIndex < ticketQueue.Count; i++)
             {
-                RegisterParkingBus(lane.parkingBus);
+                BusLane lane = busLanes[i];
+
+                if (garaFillIndex[i] >= lane.garagePositions.Count) continue;
+
+                Transform slot = lane.garagePositions[garaFillIndex[i]];
+
+                Bus bus = SpawnBus(ticketQueue[ticketIndex],slot.position,lane.transform);
+
+                lane.garageBuses.Add(bus);
+
+                garaFillIndex[i]++;
+
+                ticketIndex++;
+
+                spawnedAny = true;
             }
+
+            if (!spawnedAny) break;
+        }
+
+        if(ticketIndex < ticketQueue.Count)
+        {
+            Debug.LogWarning($"[BusStattion] ko du slot,con {ticketQueue.Count - ticketIndex} bus chu duoc spawn");
         }
     }
+
+    /// <summary>
+    /// Tinh so bus can cho moi mau (ceil(count/capacity)), roi tron round-robin giua cac mau de pha 1(bus dau tine moi lane) ko bi trung mau
+    /// </summary>
+    /// <returns></returns>
+    struct BusTicket
+    {
+        public PassengerColor passengerColor;
+        public int capacity;
+    }
+
+
+    List<BusTicket> BuiltBusTicketQueue()
+    {
+        List<PassengerColor> colors = PassengerManager.Instance.GetAllColorsPresent();
+
+        List<Queue<BusTicket>> perColorQueues = new List<Queue<BusTicket>>();
+
+        foreach(PassengerColor color in colors)
+        {
+            int count = PassengerManager.Instance.getCountByColor(color);
+            int cap = busPrefab.capacityPerBus;
+            int busesNeeded = Mathf.CeilToInt((float)count / cap);
+
+            Queue<BusTicket> q = new Queue<BusTicket>();
+
+            for (int i = 0; i < busesNeeded; i++)
+            {
+                bool isLastBus = (i == busesNeeded - 1);
+
+                // Bus cuoi cung se chi nhan phan du
+                int remainder = count - i * cap;
+                int ticketCapacity = isLastBus ? remainder : cap;
+
+                q.Enqueue(new BusTicket { passengerColor = color, capacity = ticketCapacity });
+            }
+
+            perColorQueues.Add(q);
+        }
+
+        List<BusTicket> tickets = new List<BusTicket>();
+
+        bool hasMore = true;
+
+        while (hasMore)
+        {
+            hasMore = false;
+
+            foreach(var q in perColorQueues)
+            {
+                if(q.Count > 0)
+                {
+                    tickets.Add(q.Dequeue());
+                    hasMore = true;
+                }
+            }
+        }
+
+        return tickets;
+    }
+
+    Bus SpawnBus(BusTicket ticket,Vector3 position,Transform parent)
+    {
+        // parent = lane.transform de Bus.GetComponentInParent<BusLane>() hoat dong dung
+        Bus bus = Instantiate(busPrefab, position, Quaternion.identity, parent);
+
+        bus.SetColor(ticket.passengerColor);
+        bus.SetCapacity(ticket.capacity);
+
+        return bus;
+    }
+
     public void RegisterParkingBus(Bus bus)
     {
         if (!parkingBusList.Contains(bus))
@@ -44,13 +174,13 @@ public class BusStation : MonoBehaviour
     /// </summary>
     /// <param name="color"></param>
     /// <returns></returns>
-    public BusLane GetLaneByColor(PassengerColor color)
+    public Bus GetBusByColor(PassengerColor color)
     {
-        foreach (var lane in busLanes)
+        foreach (var bus in parkingBusList)
         {
-            if (lane.laneColor == color && lane.GetCurrentBus() != null)
+            if (bus.passengerColor == color && bus.GetAvailableSeat() > 0)
             {
-                return lane;
+                return bus;
             }
         }
 
@@ -64,10 +194,8 @@ public class BusStation : MonoBehaviour
 
     public int GetAvailableSeatByColor(PassengerColor color)
     {
-        BusLane lane = GetLaneByColor(color);
+        Bus bus = GetBusByColor(color);
 
-        if (lane == null) return 0;
-
-        return lane.GetAvailableSeats();
+        return bus == null ? 0 : bus.GetAvailableSeat();
     }
 }

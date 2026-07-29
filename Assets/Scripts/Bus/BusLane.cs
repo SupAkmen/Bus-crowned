@@ -6,13 +6,10 @@ using UnityEngine.UIElements;
 
 public class BusLane : MonoBehaviour
 {
-    [Header("LaneColor")]
-    public PassengerColor laneColor;
-
     [Header("Position")]
     public Transform parkingPosition;
-    public Transform turnPosition;
-    public Transform goalPosition;
+    public List<Transform> leavePos;
+    public List<Transform> garagePositions; 
 
     [Header("Buses")]
     public Bus parkingBus;
@@ -21,22 +18,19 @@ public class BusLane : MonoBehaviour
     [Header("Settings")]
     public float moveSpeed = 5f;
 
-    private List<Vector3> garageSlotPosition = new List<Vector3>();
+    [Header("Parking")]
+    [SerializeField] float unlockParkingDistance = 2.5f;
+    public bool ParkingBusy { get; private set; }
+    public void SetParkingBusy(bool busy) => ParkingBusy = busy;
+    public float UnlockParkingDistance => unlockParkingDistance;
 
-    private void Start()
-    {
-        // Save the initialize positon 
-        foreach(Bus bus in garageBuses)
-        {
-            garageSlotPosition.Add(bus.transform.position);
-        }
-    }
+    public void SetParkingBus(Bus bus) => parkingBus = bus;
 
     /// <summary>
     /// Return the current bus in the parking
     /// </summary>
     /// <returns></returns>
-    public Bus GetCurrentBus()
+    public Bus GetCurrentParkingBus()
     {
         return parkingBus;
     }
@@ -75,7 +69,10 @@ public class BusLane : MonoBehaviour
 
 
         // Garage bus -> parking bus 
-        yield return new WaitForSeconds(0.3f);
+        while(ParkingBusy)
+        {
+            yield return null;
+        }
 
         if(garageBuses.Count > 0)
         {
@@ -92,9 +89,9 @@ public class BusLane : MonoBehaviour
 
 
             // 3. Other garage bus push one position
-            for (int i  = 0; i < garageBuses.Count && i < garageSlotPosition.Count; i++)
+            for (int i  = 0; i < garageBuses.Count && i < garagePositions.Count; i++)
             {
-                StartCoroutine(MoveBusToPosition(garageBuses[i], garageSlotPosition[i]));
+                StartCoroutine(MoveBusToPosition(garageBuses[i], garagePositions[i].position));
             }
         }
     }

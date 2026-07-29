@@ -50,18 +50,34 @@ public class AStar : MonoBehaviour
                 return RetracePath(startNode, targetNode);
             }
 
-            //foreach(GridNode neighbour in ShuffleNeighbours(currentNode))
             foreach(GridNode neighbour in currentNode.GetNeighbours())
             {
                 if(neighbour == null) continue;
 
                 if(!neighbour.walkable && neighbour != targetNode) continue;
 
-                if (neighbour.reservedBy != null && neighbour.reservedBy != currentPassenger && neighbour != targetNode) continue;
+                //if (neighbour.reservedBy != null && neighbour.reservedBy != currentPassenger && neighbour != targetNode) continue;
 
                 if(closedList.Contains(neighbour)) continue;
 
-                int newCost = currentNode.gCost + GetDistance(currentNode, neighbour);
+                int congestion = 0;
+
+                if(neighbour.occupant != null && neighbour.occupant != currentPassenger)
+                {
+                    congestion = 30;
+                }
+                // Truoc day: reservedBy la hard-block (continue), khien ca nhom bi ket
+                // vi passenger dau tien reserve het hanh lang hep, nhung nguoi con lai
+                // van CAN di qua chinh hanh lang do (khong co duong nao khac).
+                // Gio chuyen thanh phi phat de uu tien tranh, nhung van cho phep di qua
+                // (giong nguoi ta xep hang di theo sau nhau ngoai doi thuc)
+
+                if (neighbour.reservedBy != null && neighbour.reservedBy != currentPassenger && neighbour != targetNode)
+                {
+                    congestion += 30;
+                }    
+
+                int newCost = currentNode.gCost + GetDistance(currentNode, neighbour) + congestion;
 
                 if (newCost < neighbour.gCost || !openList.Contains(neighbour))
                 {

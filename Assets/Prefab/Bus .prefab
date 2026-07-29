@@ -758,7 +758,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 1.035, z: 0}
-  m_LocalScale: {x: 1.5, y: 1.5, z: 3}
+  m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 2383102372509059728}
@@ -778,9 +778,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6456a7126852c7d489445bac348f5fb8, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  capacityPerBus: 20
+  capacityPerBus: 30
   capacityText: {fileID: 6152093144299495081}
   busSpeed: 5
+  bodyRenderer: {fileID: 3826979749536742951}
   passengerColor: {fileID: 0}
 --- !u!65 &-6198196884501290273
 BoxCollider:
@@ -854,7 +855,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 418889328611010417, guid: fc6e15f546b6e3e45a017bee779f0301, type: 3}
       propertyPath: m_LocalPosition.z
-      value: -2.185
+      value: -1.51
       objectReference: {fileID: 0}
     - target: {fileID: 418889328611010417, guid: fc6e15f546b6e3e45a017bee779f0301, type: 3}
       propertyPath: m_LocalRotation.w

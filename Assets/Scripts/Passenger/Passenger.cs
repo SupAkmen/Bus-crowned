@@ -24,9 +24,8 @@ public class Passenger : MonoBehaviour
     // Dem so passenger cua tung mau dang duoc dispatch di ve bus ( chua len xe xong)
     static readonly Dictionary<PassengerColor, int> movingCountByColor = new();
 
-    Vector3 wanderOffset;
 
-    const int reservationWindow = 20; // so o phia trc dc giu ali tinh tu pathindecx hien tai
+    const int reservationWindow = 1; // so o phia trc dc giu ali tinh tu pathindecx hien tai
     readonly HashSet<GridNode> reservedWindow = new HashSet<GridNode>();
     GridNode finalTarget;  // dich cuoi cung (bus targetNode hoac target cua MoveToTargetNode), dung de re-path
 
@@ -37,7 +36,6 @@ public class Passenger : MonoBehaviour
         agent.UnRegister();
 
         float cell = PassengerGrid.Instance != null ? PassengerGrid.Instance.cellSize : 1f;
-        wanderOffset = new Vector3(Random.Range(-0.4f, 0.4f) * cell, 0f, Random.Range(-0.4f, 0.4f) * cell);
 
         StartCoroutine(AutoGroupRoutine());
     }
@@ -80,12 +78,6 @@ public class Passenger : MonoBehaviour
         }
 
         Vector3 targetPos = path[pathIndex].worldPosition;
-
-        if(pathIndex < path.Count - 1)
-        {
-            targetPos += wanderOffset;
-        }
-
         Vector3 dir = (targetPos - transform.position);
         dir.y = 0f;   // game top-down: chi di chuyen tren mat phang XZ
 
@@ -153,9 +145,9 @@ public class Passenger : MonoBehaviour
 
         if (path != null)
         {
-            int end = Mathf.Min(pathIndex + reservationWindow - 1, path.Count - 1);
+            int end = Mathf.Min(pathIndex + reservationWindow, path.Count - 1);
 
-            for(int i = pathIndex;  i <= end; i++)
+            for (int i = pathIndex;  i <= end; i++)
             {
                 desired.Add(path[i]);
             }
@@ -173,7 +165,7 @@ public class Passenger : MonoBehaviour
         // Chiem cac o trong cua so con trong hoac dang la cua chinh minh
         foreach(GridNode node in desired)
         {
-            if(node.reservedBy == null && node.reservedBy == this)
+            if(node.reservedBy == null || node.reservedBy == this)
             {
                 node.reservedBy = this;
             }
@@ -207,7 +199,7 @@ public class Passenger : MonoBehaviour
     {
         if (path == null) return false;
 
-        int end = Mathf.Min(pathIndex + reservationWindow - 1, path.Count - 1);
+        int end = Mathf.Min(pathIndex + reservationWindow, path.Count - 1);
 
         for (int i = pathIndex; i <= end; i++)
         {
@@ -224,14 +216,8 @@ public class Passenger : MonoBehaviour
 
     GridNode FindMatchingBusTargetNode()
     {
-        foreach (Bus bus in BusStation.instance.parkingBusList)
-        {
-            if (bus.passengerColor != passengerColor) continue;
-
-            return bus.targetNode;
-        }
-
-        return null;
+        Bus bus = BusStation.instance.GetBusByColor(passengerColor);
+        return bus != null ? bus.targetNode : null;
     }
 
     public void RequestPathTo(GridNode target)

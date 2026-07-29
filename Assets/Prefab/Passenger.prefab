@@ -122,6 +122,8 @@ MonoBehaviour:
   neighbors: []
   seperationWeight: 2.5
   timeHorizon: 0.6
+  pushDistance: 1
+  pushStrength: 1.5
 --- !u!54 &8012475708262305239
 Rigidbody:
   m_ObjectHideFlags: 0

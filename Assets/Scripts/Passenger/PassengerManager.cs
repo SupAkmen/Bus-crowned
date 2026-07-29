@@ -24,6 +24,34 @@ public class PassengerManager : MonoBehaviour
         passengers.Remove(p);
     }
 
+    public int getCountByColor(PassengerColor color)
+    {
+        int count = 0;
+
+        foreach(var p in passengers)
+        {
+            if(p.PassengerColor == color) count++;
+        }
+
+        return count;
+    }
+
+    public List<PassengerColor> GetAllColorsPresent()
+    {
+        List<PassengerColor> colors = new List<PassengerColor>();
+
+        foreach(var p in passengers)
+        {
+            if(!colors.Contains(p.PassengerColor))
+            {
+                colors.Add(p.PassengerColor);
+            }
+        }
+
+        return colors;
+    }
+
+    // Tim ra cac mau cung mau de mau rieng le gop nhom vao
     public GridNode GetEmptyNodeNearSameColor(Passenger source)
     {
         float minDistane = float.MaxValue;

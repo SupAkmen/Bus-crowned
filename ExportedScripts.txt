@@ -1,0 +1,2014 @@
+﻿========================================
+UNITY SCRIPT EXPORT
+========================================
+
+########################################
+FILE: Assets/Scripts/Bus/Bus.cs
+########################################
+
+using System;
+using System.Collections;
+using TMPro;
+using UnityEngine;
+
+public class Bus : MonoBehaviour
+{
+
+    [SerializeField] public int capacityPerBus = 30;
+    [SerializeField] TextMeshPro capacityText;
+    [SerializeField] float busSpeed = 5f;
+    [SerializeField] MeshRenderer bodyRenderer;
+    [HideInInspector] public PassengerColor passengerColor;
+    public GridNode targetNode;
+    int capacityInBus;
+    bool capacityInitialized = false; // so luong khach thuc te co the chua
+    bool hasNotifiedFull = false;
+    bool isLeaving = false;
+
+    // Reference to parentLane ( assign by BusLane or GetCompoonentInParent)
+    BusLane parentLane;
+
+    private void Start()
+    {
+        if(!capacityInitialized)
+        {
+            capacityInBus = capacityPerBus;
+        }   
+        UpdateCapacityText();
+
+        parentLane =  GetComponentInParent<BusLane>();
+    }
+    public void SetCapacity(int amount)
+    {
+        capacityInBus = Mathf.Clamp(amount,0,capacityPerBus);
+        capacityInitialized = true;
+        UpdateCapacityText ();
+    }
+
+    private void OnDisable()
+    {
+        if (BusStation.instance != null)
+        {
+            BusStation.instance.UnRegisterParkingBus(this);
+        }
+    }
+
+    private void Update()
+    {
+
+        MoveToGoal();
+
+    }
+
+    /// <summary>
+    /// Return the number of available seat in bus
+    /// </summary>
+    /// <returns></returns>
+    public int GetAvailableSeat()
+    {
+        return capacityInBus;
+    }
+
+    public void UpdateCapcity()
+    {
+        DecreasePassenger();
+        UpdateCapacityText();
+    }
+
+    public void SetColor(PassengerColor color)
+    {
+        passengerColor = color;
+
+        if(bodyRenderer != null && color != null && color.material != null)
+        {
+            bodyRenderer.material = color.material;
+        }
+    }
+
+    public void DecreasePassenger()
+    {
+        capacityInBus = capacityInBus - 1;
+    }
+
+    public void UpdateCapacityText()
+    {
+        capacityText.text = capacityInBus.ToString();
+    }
+
+    public void MoveToGoal()
+    {
+        if (capacityInBus <= 0)
+        {
+            capacityText.text = " ";
+
+            // Notified parent lane
+            if (!hasNotifiedFull && parentLane != null)
+            {
+                hasNotifiedFull = true;
+                parentLane.OnParkingBusFull();
+            }
+
+            if (!isLeaving)
+            {
+                isLeaving = true;
+                StartCoroutine(FollowLeavePath());
+            }
+        }
+    }
+
+    IEnumerator FollowLeavePath()
+    {
+        yield return new WaitForSeconds(0.5f);
+
+        if (parentLane == null) 
+            yield break;
+
+        parentLane.SetParkingBusy(true);
+
+        int index = 0;
+        bool parkingUnlocked = false;
+
+        foreach(Transform point in parentLane.leavePos)
+        {
+            while(Vector3.Distance(transform.position, point.position) > 0.05f)
+            {
+                Vector3 direction = point.position - transform.position;
+                direction.y = 0f;
+
+                // quay dau xe
+
+                if(direction.sqrMagnitude > 0.0001f)
+                {
+                    Quaternion targetRotation = Quaternion.LookRotation(direction);
+
+                    transform.rotation = Quaternion.RotateTowards(transform.rotation,targetRotation,100f * Time.deltaTime);
+                }
+
+                transform.position = Vector3.MoveTowards(transform.position,point.position,busSpeed * Time.deltaTime);
+
+                if(!parkingUnlocked)
+                {
+                    float distance = Vector3.Distance(transform.position, parentLane.parkingPosition.position);
+
+                    if(distance >= parentLane.UnlockParkingDistance)
+                    {
+                        parkingUnlocked = true;
+                        parentLane.SetParkingBusy(false);
+                    }
+                }
+
+                yield return null;
+            }
+        }
+
+        if(index == 0)
+        {
+            parentLane.SetParkingBusy(false);
+        }
+
+        index++;
+
+    }
+}
+
+
+
+
+########################################
+FILE: Assets/Scripts/Bus/BusLane.cs
+########################################
+
+using NUnit.Framework;
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.UIElements;
+
+public class BusLane : MonoBehaviour
+{
+    [Header("Position")]
+    public Transform parkingPosition;
+    public List<Transform> leavePos;
+    public List<Transform> garagePositions; 
+
+    [Header("Buses")]
+    public Bus parkingBus;
+    public List<Bus> garageBuses;
+
+    [Header("Settings")]
+    public float moveSpeed = 5f;
+
+    [Header("Parking")]
+    [SerializeField] float unlockParkingDistance = 2.5f;
+    public bool ParkingBusy { get; private set; }
+    public void SetParkingBusy(bool busy) => ParkingBusy = busy;
+    public float UnlockParkingDistance => unlockParkingDistance;
+
+    public void SetParkingBus(Bus bus) => parkingBus = bus;
+
+    /// <summary>
+    /// Return the current bus in the parking
+    /// </summary>
+    /// <returns></returns>
+    public Bus GetCurrentParkingBus()
+    {
+        return parkingBus;
+    }
+
+    /// <summary>
+    /// Return the empty seat in current parking bus
+    /// </summary>
+    /// <returns></returns>
+    public int GetAvailableSeats()
+    {
+        if (parkingBus == null) return 0;
+
+        return parkingBus.GetAvailableSeat();
+    }    
+
+    /// <summary>
+    /// Call when the parking bus is full
+    /// 1. Parking bus move to the goal
+    /// 2. Garage bus [0] move to parking seat
+    /// 3. Other garage bus push one position
+    /// </summary>
+    public void OnParkingBusFull()
+    {
+        StartCoroutine(HandleBusFullSequence());
+    }
+
+    IEnumerator HandleBusFullSequence()
+    {
+        Bus fullBus = parkingBus;
+
+        //Remove fullBus to passenger don't findpath to bus is running to goal.
+        BusStation.instance.UnRegisterParkingBus(fullBus);
+        parkingBus = null;
+
+        // Parking bus move to the goal 
+
+
+        // Garage bus -> parking bus 
+        while(ParkingBusy)
+        {
+            yield return null;
+        }
+
+        if(garageBuses.Count > 0)
+        {
+            Bus nextBus  = garageBuses[0];
+            garageBuses.RemoveAt(0);
+
+            yield return StartCoroutine(MoveBusToPosition(nextBus, parkingPosition.position + new Vector3(0,0.63f,0)));
+
+            parkingBus = nextBus;
+
+            BusStation.instance.RegisterParkingBus(nextBus);
+
+            nextBus.targetNode = PassengerGrid.Instance.GetNearestNode(parkingPosition.position);
+
+
+            // 3. Other garage bus push one position
+            for (int i  = 0; i < garageBuses.Count && i < garagePositions.Count; i++)
+            {
+                StartCoroutine(MoveBusToPosition(garageBuses[i], garagePositions[i].position));
+            }
+        }
+    }
+
+    IEnumerator MoveBusToPosition(Bus bus, Vector3 targetPos)
+    {
+        Vector3 startPos = bus.transform.position;
+        float distance = Vector3.Distance(startPos, targetPos);
+        float duration = distance / moveSpeed;
+        float elapsed = 0f;
+
+        while(elapsed < duration)
+        {
+            elapsed += Time.deltaTime;
+            float t = Mathf.Clamp01(elapsed/duration);
+            bus.transform.position = Vector3.Lerp(startPos, targetPos, t);
+            yield return null;
+        }
+
+        bus.transform.position = targetPos;
+    }
+}
+
+
+
+########################################
+FILE: Assets/Scripts/Bus/BusStation.cs
+########################################
+
+
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+
+public class BusStation : MonoBehaviour
+{
+    public static BusStation instance;
+
+    public BusLane[] busLanes;
+
+    [Header("Spawn")]
+    [SerializeField] public Bus busPrefab;
+
+    // The list of car in parking 
+    [HideInInspector] public List<Bus> parkingBusList = new List<Bus>();
+
+    private void Awake()
+    {
+        instance = this;
+    }
+    private void Start()
+    {
+        StartCoroutine(InitializeBusesRoutine());
+    }
+
+    IEnumerator InitializeBusesRoutine()
+    {
+        // Cho mot frame de tat ca Passenger da spawn and register xong truoc khi dem so luong
+        yield return null;
+
+        List<BusTicket> ticketQueue = BuiltBusTicketQueue();
+
+        int laneCount = busLanes.Length;
+        int ticketIndex = 0;
+
+        // Pha 1 : spawn tai vi tri parking
+
+        for(int i = 0; i < laneCount && ticketIndex < ticketQueue.Count; i++)
+        {
+            BusLane lane = busLanes[i];
+
+            Bus bus = SpawnBus(ticketQueue[ticketIndex], lane.parkingPosition.position + new Vector3(0,0.63f,0), lane.transform);
+
+            lane.SetParkingBus(bus);
+            RegisterParkingBus(bus);
+
+            ticketIndex++;
+        }
+
+        // Pha 2 : Spawn bus con lai chia deu (round-robin) vao garage cua tung lane
+
+        int[] garaFillIndex = new int[laneCount];
+
+        while(ticketIndex < ticketQueue.Count)
+        {
+            bool spawnedAny = false;
+
+            for (int i = 0; i < laneCount && ticketIndex < ticketQueue.Count; i++)
+            {
+                BusLane lane = busLanes[i];
+
+                if (garaFillIndex[i] >= lane.garagePositions.Count) continue;
+
+                Transform slot = lane.garagePositions[garaFillIndex[i]];
+
+                Bus bus = SpawnBus(ticketQueue[ticketIndex],slot.position,lane.transform);
+
+                lane.garageBuses.Add(bus);
+
+                garaFillIndex[i]++;
+
+                ticketIndex++;
+
+                spawnedAny = true;
+            }
+
+            if (!spawnedAny) break;
+        }
+
+        if(ticketIndex < ticketQueue.Count)
+        {
+            Debug.LogWarning($"[BusStattion] ko du slot,con {ticketQueue.Count - ticketIndex} bus chu duoc spawn");
+        }
+    }
+
+    /// <summary>
+    /// Tinh so bus can cho moi mau (ceil(count/capacity)), roi tron round-robin giua cac mau de pha 1(bus dau tine moi lane) ko bi trung mau
+    /// </summary>
+    /// <returns></returns>
+    struct BusTicket
+    {
+        public PassengerColor passengerColor;
+        public int capacity;
+    }
+
+
+    List<BusTicket> BuiltBusTicketQueue()
+    {
+        List<PassengerColor> colors = PassengerManager.Instance.GetAllColorsPresent();
+
+        List<Queue<BusTicket>> perColorQueues = new List<Queue<BusTicket>>();
+
+        foreach(PassengerColor color in colors)
+        {
+            int count = PassengerManager.Instance.getCountByColor(color);
+            int cap = busPrefab.capacityPerBus;
+            int busesNeeded = Mathf.CeilToInt((float)count / cap);
+
+            Queue<BusTicket> q = new Queue<BusTicket>();
+
+            for (int i = 0; i < busesNeeded; i++)
+            {
+                bool isLastBus = (i == busesNeeded - 1);
+
+                // Bus cuoi cung se chi nhan phan du
+                int remainder = count - i * cap;
+                int ticketCapacity = isLastBus ? remainder : cap;
+
+                q.Enqueue(new BusTicket { passengerColor = color, capacity = ticketCapacity });
+            }
+
+            perColorQueues.Add(q);
+        }
+
+        List<BusTicket> tickets = new List<BusTicket>();
+
+        bool hasMore = true;
+
+        while (hasMore)
+        {
+            hasMore = false;
+
+            foreach(var q in perColorQueues)
+            {
+                if(q.Count > 0)
+                {
+                    tickets.Add(q.Dequeue());
+                    hasMore = true;
+                }
+            }
+        }
+
+        return tickets;
+    }
+
+    Bus SpawnBus(BusTicket ticket,Vector3 position,Transform parent)
+    {
+        // parent = lane.transform de Bus.GetComponentInParent<BusLane>() hoat dong dung
+        Bus bus = Instantiate(busPrefab, position, Quaternion.identity, parent);
+
+        bus.SetColor(ticket.passengerColor);
+        bus.SetCapacity(ticket.capacity);
+
+        return bus;
+    }
+
+    public void RegisterParkingBus(Bus bus)
+    {
+        if (!parkingBusList.Contains(bus))
+        {
+            parkingBusList.Add(bus);
+            bus.targetNode = PassengerGrid.Instance.GetNearestNode(bus.transform.position);
+        }
+    }
+
+    public void UnRegisterParkingBus(Bus bus)
+    {
+        parkingBusList.Remove(bus);
+    }
+
+    /// <summary>
+    /// Find the lane have same color with parking bus and have empty seat
+    /// </summary>
+    /// <param name="color"></param>
+    /// <returns></returns>
+    public Bus GetBusByColor(PassengerColor color)
+    {
+        foreach (var bus in parkingBusList)
+        {
+            if (bus.passengerColor == color && bus.GetAvailableSeat() > 0)
+            {
+                return bus;
+            }
+        }
+
+        return null;
+    }
+    /// <summary>
+    /// Get the number of available spaces in the parking lane of the corresponding color.
+    /// </summary>
+    /// <param name="color"></param>
+    /// <returns></returns>
+
+    public int GetAvailableSeatByColor(PassengerColor color)
+    {
+        Bus bus = GetBusByColor(color);
+
+        return bus == null ? 0 : bus.GetAvailableSeat();
+    }
+}
+
+
+
+########################################
+FILE: Assets/Scripts/Bus/BusTrigger.cs
+########################################
+
+using UnityEngine;
+
+public class BusTrigger : MonoBehaviour
+{
+    Bus bus;
+    private void Awake()
+    {
+        bus = GetComponentInParent<Bus>();
+    }
+
+    private void OnTriggerEnter(Collider other)
+    {
+        Passenger passenger = other.GetComponent<Passenger>();
+
+        if (passenger == null) return;
+
+        if (passenger.PassengerColor != bus.passengerColor)
+            return;
+
+        passenger.EnterBus(bus);
+    }
+}
+
+
+
+########################################
+FILE: Assets/Scripts/Other/AStar.cs
+########################################
+
+using System.Collections.Generic;
+using UnityEngine;
+
+public class AStar : MonoBehaviour
+{
+    public static AStar instance;
+    private void Awake()
+    {
+        instance = this;
+    }
+
+    public List<GridNode> FindPath(Passenger currentPassenger,GridNode startNode,GridNode targetNode)
+    {
+        foreach(GridNode node in PassengerGrid.Instance.Nodes)
+        {
+            node.gCost = int.MaxValue;
+            node.hCost = 0;
+            node.parent = null;
+        }
+
+        startNode.gCost = 0;
+        startNode.hCost = GetDistance(startNode, targetNode);
+
+        List<GridNode> openList = new();
+        HashSet<GridNode> closedList = new();
+
+        openList.Add(startNode);
+
+        while(openList.Count > 0)
+        {
+            GridNode currentNode = openList[0];
+
+            // tim node co fcost nho nhat
+
+            for(int i = 1; i < openList.Count; i++)
+            {
+                if (openList[i].fCost <  currentNode.fCost || (openList[i].fCost == currentNode.fCost && openList[i].hCost < currentNode.hCost))
+                {
+                    currentNode = openList[i];
+                }
+            }
+
+            openList.Remove(currentNode);
+            closedList.Add(currentNode);
+
+            // di toi dich
+
+            if(currentNode == targetNode)
+            {
+                return RetracePath(startNode, targetNode);
+            }
+
+            //foreach(GridNode neighbour in ShuffleNeighbours(currentNode))
+            foreach(GridNode neighbour in currentNode.GetNeighbours())
+            {
+                if(neighbour == null) continue;
+
+                if(!neighbour.walkable && neighbour != targetNode) continue;
+
+                if (neighbour.reservedBy != null && neighbour.reservedBy != currentPassenger && neighbour != targetNode) continue;
+
+                if(closedList.Contains(neighbour)) continue;
+
+                int congestion = 0;
+
+                if(neighbour.occupant != null && neighbour.occupant != currentPassenger)
+                {
+                    congestion = 30;
+                }
+
+                int newCost = currentNode.gCost + GetDistance(currentNode, neighbour) + congestion;
+
+                if (newCost < neighbour.gCost || !openList.Contains(neighbour))
+                {
+                    neighbour.gCost = newCost;
+                    neighbour.hCost = GetDistance(neighbour,targetNode);
+                    neighbour.parent = currentNode;
+
+                    if(!openList.Contains(neighbour))
+                    {
+                        openList.Add(neighbour);
+                    }
+                }
+            }
+
+        }
+
+        return null;
+    }
+
+    List<GridNode> RetracePath(GridNode startNode,GridNode endNode)
+    {
+        List<GridNode> path = new();
+
+        GridNode currentNode = endNode;
+
+        while(currentNode != startNode)
+        {
+            path.Add(currentNode);
+            currentNode = currentNode.parent;
+        }
+
+        path.Reverse();
+
+        return path;
+    }
+
+    public static int GetDistance(GridNode a,GridNode b)
+    {
+        int dx = Mathf.Abs(a.column - b.column);
+        int dy = Mathf.Abs(a.row - b.row);
+
+        if (dx > dy)
+            return 14 * dy + 10 * (dx - dy);
+        return 14 * dx + 10 * (dy - dx);
+
+    }
+
+}
+
+
+
+########################################
+FILE: Assets/Scripts/Other/GridNode.cs
+########################################
+
+using System.Collections.Generic;
+using UnityEngine;
+
+public class GridNode
+{
+    public int row;
+    public int column;
+
+    public Vector3 worldPosition;
+
+    public bool walkable = true;
+
+    public Passenger occupant;
+
+    // Reservation grid
+    public Passenger reservedBy;
+
+    public GridNode parent;
+    public GridNode Up;
+    public GridNode Down;
+    public GridNode Left;
+    public GridNode Right;
+
+    // Diagonal neighbours ( 8-direction pathfiding)
+    public GridNode UpLeft;
+    public GridNode UpRight;
+    public GridNode DownLeft;
+    public GridNode DownRight;
+
+    public int gCost;
+    public int hCost;
+
+    public int fCost => gCost + hCost;
+
+    public GridNode(int row, int column, Vector3 worldPosition)
+    {
+        this.row = row;
+        this.column = column;
+        this.worldPosition = worldPosition;
+    }
+
+    public IEnumerable<GridNode> GetNeighbours()
+    {
+        if (Up != null)
+            yield return Up;
+        if (Down != null)
+            yield return Down;
+        if (Left != null)
+            yield return Left;
+        if (Right != null)
+            yield return Right;
+
+        if (UpLeft != null && (Up == null || Up.walkable) && (Left == null || Left.walkable))
+        {
+            yield return UpLeft;
+        }
+
+        if (UpRight != null && (Up == null || Up.walkable) && (Right == null || Right.walkable))
+        {
+            yield return UpRight;
+        }
+
+        if (DownLeft != null && (Down == null || Down.walkable) && (Left == null || Left.walkable))
+        {
+            yield return DownLeft;
+        }
+
+        if (DownRight != null && (Right == null || Right.walkable) && (Down == null || Down.walkable))
+        {
+            yield return DownRight;
+        }
+    }
+}
+
+
+
+########################################
+FILE: Assets/Scripts/Other/MovementBoundary.cs
+########################################
+
+using UnityEngine;
+
+public class MovementBoundary : MonoBehaviour
+{
+    public static MovementBoundary Instance;
+    [SerializeField] BoxCollider boxCollider;
+
+    private void Awake()
+    {
+        Instance = this;
+    }
+
+    public Vector3 Clamp(Vector3 pos)
+    {
+        Bounds b = boxCollider.bounds;
+
+        pos.x = Mathf.Clamp(pos.x, b.min.x, b.max.x);
+
+        pos.z = Mathf.Clamp(pos.z, b.min.z, b.max.z);
+
+        return pos;
+    }
+
+    public Bounds GetBounds()
+    {
+        return boxCollider.bounds;
+    }
+}
+
+
+
+########################################
+FILE: Assets/Scripts/Passenger/Passenger.cs
+########################################
+
+using NUnit.Framework;
+using System.Collections;
+using System.Collections.Generic;
+using UnityEditor.Experimental.GraphView;
+using UnityEngine;
+
+public class Passenger : MonoBehaviour
+{
+    PassengerColor passengerColor;
+    [SerializeField] MeshRenderer bodyRenderer;
+    public PassengerColor PassengerColor => passengerColor;
+    public GridNode CurrentNode;
+
+    List<GridNode> path;
+    int pathIndex;
+
+    RVOAgent agent;
+
+    bool isEntering;
+    // đang trong quá trình di chuyển theo path
+    bool isMoving;   
+    // Ktra xem passenger co dang duoc dispatch ve bus hay ko (dung de khoa theo mau tranh tinh trang dispatch 1 nhom khac cung mau trong khi nhom nay chua len het xe)
+    bool isDispatchedToBus;
+    // Dem so passenger cua tung mau dang duoc dispatch di ve bus ( chua len xe xong)
+    static readonly Dictionary<PassengerColor, int> movingCountByColor = new();
+
+
+    const int reservationWindow = 20; // so o phia trc dc giu ali tinh tu pathindecx hien tai
+    readonly HashSet<GridNode> reservedWindow = new HashSet<GridNode>();
+    GridNode finalTarget;  // dich cuoi cung (bus targetNode hoac target cua MoveToTargetNode), dung de re-path
+
+    private void Start()
+    {
+        agent = GetComponent<RVOAgent>();
+        isMoving = false;
+        agent.UnRegister();
+
+        float cell = PassengerGrid.Instance != null ? PassengerGrid.Instance.cellSize : 1f;
+
+        StartCoroutine(AutoGroupRoutine());
+    }
+
+    private void Update()
+    {
+        if (isEntering) return;
+
+        if (path == null || pathIndex >= path.Count)
+        {
+            if (isMoving)
+            {
+                // Đã đi hết path hoặc path null -> dừng lại
+                isMoving = false;
+                agent.preferredVelocity = Vector3.zero;
+                agent.velocity = Vector3.zero;
+
+                if(isDispatchedToBus)
+                {
+                    isDispatchedToBus = false;
+                }
+
+                // Căn chỉnh vị trí chính xác vào giữa ô lưới
+                if (CurrentNode != null)
+                {
+                    Vector3 exactPos = CurrentNode.worldPosition;
+                    exactPos.y = transform.position.y; // Giữ nguyên độ cao Y
+                    transform.position = exactPos;
+                }
+            }
+
+            return;
+        }
+
+        if ((IsWindowBlocked()))
+        {
+            RequestPathTo(finalTarget);
+
+            if (path == null || pathIndex >= path.Count) return;
+        }
+
+        Vector3 targetPos = path[pathIndex].worldPosition;
+        Vector3 dir = (targetPos - transform.position);
+        dir.y = 0f;   // game top-down: chi di chuyen tren mat phang XZ
+
+        float speed = Random.Range(agent.maxSpeed - 1.5f,agent.maxSpeed);
+        agent.preferredVelocity = dir.normalized * speed;
+
+        if (dir.magnitude < 0.3f)
+        {
+            CurrentNode.walkable = true;
+            CurrentNode.occupant = null;
+
+            CurrentNode = path[pathIndex];
+
+            CurrentNode.walkable = false;
+            CurrentNode.occupant = this;
+
+            pathIndex++;
+
+            ReserveWindow();
+        }
+    }
+
+    /// <summary>
+    /// Kiem tra xem mau nay hien co dang co passenger nao dang duoc disptach ve bus hay khong, passengerselector se dung ham nay de chan click chon them
+    /// cung mau khi dang co nhom di chuyen tranh tinh trang dispatch chong len nhau lam ngheo bus
+    /// </summary>
+    /// <param name="passengerColor"></param>
+    /// <returns></returns>
+    public static bool IsColorMoving(PassengerColor passengerColor)
+    {
+        return passengerColor != null && movingCountByColor.TryGetValue(passengerColor, out var count) && count > 0;
+    }
+
+    static void IncrementMoving(PassengerColor passengerColor)
+    {
+        if (passengerColor == null) return;
+
+        movingCountByColor.TryGetValue(passengerColor, out int count);
+        movingCountByColor[passengerColor] = count + 1;
+    }
+
+    static void DecrementMoving(PassengerColor passengerColor)
+    {
+        if(passengerColor == null) return;
+
+        if(movingCountByColor.TryGetValue(passengerColor,out int count))
+        {
+            movingCountByColor[passengerColor] = Mathf.Max(0,count-1);
+        }
+    }
+
+    public void SetColor(PassengerColor color)
+    {
+        passengerColor = color;
+
+        bodyRenderer.material = color.material;
+    }
+
+    /// <summary>
+    /// Giu truoc reservationWindow o ke tiep tren path ( tu pathIndex hien tai) giai phong cac o da giu trc do khong con nam trong cua so
+    /// </summary>
+    void ReserveWindow()
+    {
+        HashSet<GridNode> desired = new HashSet<GridNode>();
+
+        if (path != null)
+        {
+            int end = Mathf.Min(pathIndex + reservationWindow, path.Count - 1);
+
+            for (int i = pathIndex;  i <= end; i++)
+            {
+                desired.Add(path[i]);
+            }
+        }
+
+        // Giai phong nhung o ko con nam trong cua so moi
+        foreach(GridNode node in reservedWindow)
+        {
+            if(!desired.Contains(node) && node.reservedBy == this)
+            {
+                node.reservedBy = null;
+            }
+        }
+
+        // Chiem cac o trong cua so con trong hoac dang la cua chinh minh
+        foreach(GridNode node in desired)
+        {
+            if(node.reservedBy == null && node.reservedBy == this)
+            {
+                node.reservedBy = this;
+            }
+        }
+
+        reservedWindow.Clear();
+
+        foreach(GridNode node in desired)
+        {
+            if(node.reservedBy == this)
+            {
+                reservedWindow.Add(node);
+            }
+        }
+    }
+
+    public void ReleaseAllReservations()
+    {
+        foreach(GridNode node in reservedWindow)
+        {
+            if(node.reservedBy == this)
+            {
+                node.reservedBy = null;
+            }
+        }
+
+        reservedWindow.Clear();
+    }
+
+    bool IsWindowBlocked()
+    {
+        if (path == null) return false;
+
+        int end = Mathf.Min(pathIndex + reservationWindow, path.Count - 1);
+
+        for (int i = pathIndex; i <= end; i++)
+        {
+            GridNode node = path[i];
+
+            if (node.reservedBy != null && node.reservedBy != this)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    GridNode FindMatchingBusTargetNode()
+    {
+        Bus bus = BusStation.instance.GetBusByColor(passengerColor);
+        return bus != null ? bus.targetNode : null;
+    }
+
+    public void RequestPathTo(GridNode target)
+    {
+        ReleaseAllReservations();
+
+        finalTarget = target;
+        pathIndex = 0;
+
+        if (target == null)
+        {
+            path = null;
+            isMoving = false;
+            agent.UnRegister();
+            return;
+        }
+
+        path = AStar.instance.FindPath(this, CurrentNode, target);
+
+        if (path == null || path.Count == 0)
+        {
+            path = null;
+            isMoving = false;
+            agent.UnRegister();
+            return;
+        }
+
+        ReserveWindow();
+    }
+
+    /// <summary>
+    /// Khoang cach Manhattan tu vi tri hien tai toi bus dich (hoac finalTarget dang theo duoi).
+    /// Dung de sap xep uu tien trong MoveGroup - ai gan dich hon di truoc.
+    /// Tra ve int.MaxValue neu khong xac dinh duoc dich (vi du khong con bus cung mau).
+    /// </summary>
+    public int GetDistanceToTarget()
+    {
+        GridNode target = finalTarget != null ? finalTarget : FindMatchingBusTargetNode();
+
+        if (target == null || CurrentNode == null) return int.MaxValue;
+
+        return AStar.GetDistance(CurrentNode, target);
+    }
+
+
+    /// <summary>
+    /// Gọi Move cho một nhóm passengers cùng lúc.
+    /// Tạm mở walkable cho tất cả ô của nhóm trước khi tìm đường,
+    /// để các passenger không chặn đường nhau.
+    /// </summary>
+    public static void MoveGroup(List<Passenger> group)
+    {
+        // Uu tien passenger gan dich (bus) hon tim duong va giu o truoc
+        group.Sort((a, b) => a.GetDistanceToTarget().CompareTo(b.GetDistanceToTarget()));
+
+        //Tạm mở walkable cho tất cả ô của nhóm
+        foreach (Passenger p in group)
+        {
+            if (p.CurrentNode != null)
+            {
+                p.CurrentNode.walkable = true;
+            }
+        }
+
+        // Tìm đường cho từng passenger
+        foreach (Passenger p in group)
+        {
+            p.MoveInternal();
+
+            // Neu tim duco duong thanh cong (dang di chuyen) -> khoa mau nay lai tranh mot nhom mau khac cung mau bi dispatch chong len luc nay
+            if(p.isMoving && !p.isDispatchedToBus)
+            {
+                p.isDispatchedToBus = true;
+                IncrementMoving(p.passengerColor);
+            }
+        }
+
+        // Đánh dấu lại walkable = false cho những passenger chưa tìm được đường (vẫn đứng tại chỗ)
+        foreach (Passenger p in group)
+        {
+            if (p.CurrentNode != null)
+            {
+                p.CurrentNode.walkable = false;
+                p.CurrentNode.occupant = p;
+            }
+        }
+    }
+
+    public void Move()
+    {
+        // Giữ lại cho backward compatibility nhưng có thể gặp lỗi nếu gọi riêng lẻ
+        // Nên dùng MoveGroup() thay thế
+        MoveInternal();
+        Debug.Log("Move");
+    }
+
+    void MoveInternal()
+    {
+        agent.Register();
+        isMoving = true;
+        FindPath();
+    }
+
+    void FindPath()
+    {
+        RequestPathTo(FindMatchingBusTargetNode());
+    }
+
+    public void EnterBus(Bus bus)
+    {
+        if(isEntering ) return;
+
+        isEntering = true;
+        isMoving = false;
+
+        // Neu da len bus thanh cong -> giai phong mau nay
+        if(isDispatchedToBus)
+        {
+            isDispatchedToBus = false;
+            DecrementMoving(passengerColor);
+        }
+
+        ReleaseAllReservations();
+
+        // Giải phóng ô hiện tại
+        if (CurrentNode != null)
+        {
+            CurrentNode.walkable = true;
+            CurrentNode.occupant = null;
+            CurrentNode = null;
+        }
+
+        PassengerManager.Instance.Unregister(this);
+        agent.UnRegister();
+
+        StartCoroutine(JumpIntoBus(bus));
+        bus.UpdateCapcity();
+    }
+
+    IEnumerator JumpIntoBus(Bus bus)
+    {
+        Vector3 start = transform.position;
+        Vector3 end = bus.transform.position;
+
+        float duration = 0.4f;
+        float t = 0;
+
+        while (t < duration)
+        {
+            t += Time.deltaTime;
+
+            float p = t / duration;
+
+            Vector3 pos = Vector3.Lerp(start, end, p);
+
+            pos.y += Mathf.Sin(p * Mathf.PI) * 1.5f;
+
+            transform.position = pos;
+
+            yield return null;
+        }
+
+        transform.SetParent(bus.transform);
+
+        Destroy(gameObject);
+       
+    }
+
+    /// <summary>
+    /// The implicit loop runs continously to automatically group
+    /// </summary>
+    /// <returns></returns>
+    IEnumerator AutoGroupRoutine()
+    {
+        yield return new WaitForSeconds(Random.Range(0.1f, 1.0f));
+
+        while (true)
+        {
+            yield return new WaitForSeconds(1.0f);
+
+            if (isMoving || isEntering) continue;
+
+            if (CurrentNode != null)
+            {
+                // Kiểm tra xem cả 4 hướng xung quanh có trống hoàn toàn không (không có ai đứng)
+                bool isCompletelyIsolated = true;
+                foreach (GridNode neighbour in CurrentNode.GetNeighbours())
+                {
+                    // Nếu có bất kỳ ô nào xung quanh có người đứng (bất kể màu gì), thì không phải isolated
+                    if (neighbour != null && neighbour.occupant != null)
+                    {
+                        isCompletelyIsolated = false;
+                        break;
+                    }
+                }
+
+                if (isCompletelyIsolated)
+                {
+                    // Đứng 1 mình và 4 hướng đều trống -> tự động tìm chỗ ghép nhóm
+                    GridNode emptyNode = PassengerManager.Instance.GetEmptyNodeNearSameColor(this);
+
+                    if (emptyNode != null)
+                    {
+                        MoveToTargetNode(emptyNode);
+                    }
+                }
+            }
+        }
+    }
+
+    public void MoveToTargetNode(GridNode target)
+    {
+        agent.Register();
+        isMoving = true;
+
+        bool walkable = CurrentNode.walkable;
+        CurrentNode.walkable = true;
+
+        RequestPathTo(target);
+
+        if (path == null)
+        {
+            isMoving = false;
+            agent.UnRegister();
+            CurrentNode.walkable = walkable;
+        }
+    }
+
+    public List<Passenger> GetConnectedPassengers()
+    {
+        List<Passenger> result = new();
+
+        Queue<GridNode> queue = new();
+        HashSet<GridNode> visited = new();
+
+        queue.Enqueue(CurrentNode);
+        visited.Add(CurrentNode);
+
+        while (queue.Count > 0)
+        {
+            GridNode node = queue.Dequeue();
+
+            Passenger passenger = node.occupant;
+
+            if(passenger == null) continue;
+
+            if(passenger.PassengerColor != PassengerColor) continue;
+
+            result.Add(passenger);
+
+            foreach(GridNode neighbour in node.GetNeighbours())
+            {
+                if(neighbour == null) continue;
+
+                if(visited.Contains(neighbour)) continue;
+
+                Passenger neighbourPassenger = neighbour.occupant;
+
+                if(neighbourPassenger == null) continue;
+
+                if (neighbourPassenger.PassengerColor != PassengerColor) continue;
+
+                visited.Add(neighbour);
+                queue.Enqueue(neighbour);
+            }
+        }
+
+        return result;
+    }
+
+
+}
+
+
+
+
+########################################
+FILE: Assets/Scripts/Passenger/PassengerColor.cs
+########################################
+
+using UnityEngine;
+
+[CreateAssetMenu(fileName = "PassengerColor", menuName = "Scriptable Objects/PassengerColor")]
+public class PassengerColor : ScriptableObject
+{
+    public string colorName;
+
+    public Material material;
+
+}
+
+
+
+########################################
+FILE: Assets/Scripts/Passenger/PassengerGrid.cs
+########################################
+
+using UnityEngine;
+
+public class PassengerGrid : MonoBehaviour
+{
+    public static PassengerGrid Instance;
+    [SerializeField] MovementBoundary movementBoundary;
+
+    public GridNode[,] Nodes;
+
+    public int Rows;
+    public int Columns;
+
+    public float cellSize = 1.0f;
+
+    Vector3 gridOrigin;
+
+    private void Awake()
+    {
+        Instance = this;
+        CreateGrid();
+    }
+
+    public void CreateGrid()
+    {
+        Bounds bounds = movementBoundary.GetBounds();
+
+        Columns = Mathf.RoundToInt(bounds.size.x / cellSize);
+        Rows = Mathf.RoundToInt(bounds.size.z / cellSize);
+
+        Nodes = new GridNode[Rows, Columns];
+
+        gridOrigin = new Vector3(bounds.min.x + cellSize * 0.5f, bounds.center.y, bounds.max.z - cellSize * 0.5f);
+
+        Vector3 startPos = gridOrigin;
+
+        for (int r = 0; r < Rows; r++)
+        {
+            for (int c = 0; c < Columns; c++)
+            {
+                Vector3 pos = startPos + new Vector3(c * cellSize, 0, -r * cellSize);
+
+                Nodes[r, c] = new GridNode(r, c, pos);
+            }
+        }
+
+        for (int r = 0; r < Rows; r++)
+        {
+            for (int c = 0; c < Columns; c++)
+            {
+                GridNode node = Nodes[r, c];
+
+                if (r > 0)
+                    node.Up = Nodes[r - 1, c];
+
+                if (r < Rows - 1)
+                    node.Down = Nodes[r + 1, c];
+
+                if (c > 0)
+                    node.Left = Nodes[r, c - 1];
+
+                if (c < Columns - 1)
+                    node.Right = Nodes[r, c + 1];
+
+                // Diagonal neighbours
+                if (r > 0 && c > 0)
+                    node.UpLeft = Nodes[r - 1, c - 1];
+
+                if (r > 0 && c < Columns - 1)
+                    node.UpRight = Nodes[r - 1, c + 1];
+
+                if (r < Rows - 1 && c > 0)
+                    node.DownLeft = Nodes[r + 1, c - 1];
+
+                if (r < Rows - 1 && c < Columns - 1)
+                    node.DownRight = Nodes[r + 1, c + 1];
+            }
+        }
+    }
+
+    public GridNode GetNearestNode(Vector3 worldPos)
+    {
+        int column = Mathf.RoundToInt((worldPos.x - gridOrigin.x) / cellSize);
+        int row = Mathf.RoundToInt((gridOrigin.z - worldPos.z) / cellSize);
+
+        column = Mathf.Clamp(column, 0, Columns - 1);
+        row = Mathf.Clamp(row, 0, Rows - 1);
+
+        return Nodes[row, column];
+    }
+
+    private void OnDrawGizmos()
+    {
+        if (Nodes == null)
+            return;
+
+        foreach (GridNode node in Nodes)
+        {
+            Gizmos.color = node.walkable ? Color.white : Color.red;
+
+            Gizmos.DrawWireCube(
+                node.worldPosition,
+                new Vector3(cellSize, 0.05f, cellSize)
+            );
+        }
+    }
+
+}
+
+
+
+########################################
+FILE: Assets/Scripts/Passenger/PassengerManager.cs
+########################################
+
+using NUnit.Framework;
+using System.Collections.Generic;
+using UnityEngine;
+
+public class PassengerManager : MonoBehaviour
+{
+    public static PassengerManager Instance;
+
+    [HideInInspector] List<Passenger> passengers = new List<Passenger>();
+
+    private void Awake()
+    {
+        Instance = this;
+    }
+
+    public void Register(Passenger p)
+    {
+        if(!passengers.Contains(p))
+                passengers.Add(p);
+    }
+
+    public void Unregister(Passenger p)
+    {
+        passengers.Remove(p);
+    }
+
+    public int getCountByColor(PassengerColor color)
+    {
+        int count = 0;
+
+        foreach(var p in passengers)
+        {
+            if(p.PassengerColor == color) count++;
+        }
+
+        return count;
+    }
+
+    public List<PassengerColor> GetAllColorsPresent()
+    {
+        List<PassengerColor> colors = new List<PassengerColor>();
+
+        foreach(var p in passengers)
+        {
+            if(!colors.Contains(p.PassengerColor))
+            {
+                colors.Add(p.PassengerColor);
+            }
+        }
+
+        return colors;
+    }
+
+    // Tim ra cac mau cung mau de mau rieng le gop nhom vao
+    public GridNode GetEmptyNodeNearSameColor(Passenger source)
+    {
+        float minDistane = float.MaxValue;
+        GridNode bestNode = null;
+
+        foreach(Passenger p in passengers)
+        {
+            if (p == source) continue;
+
+            if (p.PassengerColor != source.PassengerColor) continue;
+
+            if(p.CurrentNode == null) continue;
+
+            foreach(GridNode neighbour in p.CurrentNode.GetNeighbours())
+            {
+                if (neighbour != null && neighbour.walkable)
+                {
+                    float distance = Vector3.Distance(source.transform.position,neighbour.worldPosition);
+
+                    if(distance < minDistane)
+                    {
+                        minDistane = distance;
+                        bestNode = neighbour;
+                    }
+                }
+            }
+        }
+
+        return bestNode;
+    }
+}
+
+
+
+########################################
+FILE: Assets/Scripts/Passenger/PassengerSelector.cs
+########################################
+
+using NUnit.Framework;
+using System.Collections.Generic;
+using UnityEngine;
+
+public class PassengerSelector : MonoBehaviour
+{
+    Camera cam;
+
+    private void Awake()
+    {
+        cam = Camera.main;
+    }
+
+    private void Update()
+    {
+        if (Input.GetMouseButtonDown(0))
+        {
+            Ray ray = cam.ScreenPointToRay(Input.mousePosition);
+
+            if (Physics.Raycast(ray, out RaycastHit hit))
+            {
+                Passenger p = hit.collider.GetComponentInParent<Passenger>();
+                if (p != null && p.CurrentNode != null)
+                {
+                    if(Passenger.IsColorMoving(p.PassengerColor))
+                    {
+                        return;
+                    }
+
+                    List<Passenger> group = p.GetConnectedPassengers();
+                    // Dùng MoveGroup để tạm mở walkable cho cả nhóm trước khi tìm đường
+                    // Check the number of available seat in bus same color
+                    int availablesSeat = BusStation.instance.GetAvailableSeatByColor(p.PassengerColor);
+
+                    if (availablesSeat >= 0)
+                    {
+                        // Passenger move = availableSeat 
+                        int moveCount = Mathf.Min(group.Count, availablesSeat);
+                        List<Passenger> moveGroup = group.GetRange(0, moveCount);
+
+                        Passenger.MoveGroup(moveGroup);
+                    }
+                }
+            }
+        }
+
+    }
+
+
+
+
+}
+
+
+
+
+########################################
+FILE: Assets/Scripts/Passenger/PassengerSpawnAreas.cs
+########################################
+
+using NUnit.Framework;
+using System.Collections.Generic;
+using UnityEngine;
+
+public class PassengerSpawnAreas : MonoBehaviour
+{
+    [Header("Spawn Area")]
+    public Transform startPoint;
+
+    public float width = 8f;
+    public float height = 10f;
+
+    public float spaceX = 1f;
+    public float spaceZ = 1f;
+
+    [Header("Prefab")]
+    public Passenger passengerPrefab;
+
+    [Header("Passenger Color")]
+    public List<PassengerColor> colors;
+
+    [Header("ClusterColor")]
+    [SerializeField] int minClusterSize = 4;
+    [SerializeField] int maxClusterSize = 8;
+    Dictionary<GridNode, PassengerColor> colorMap = new();
+
+    int columns;
+    int rows;
+
+    private void Start()
+    {
+        rows = Mathf.FloorToInt(height / spaceZ);
+        columns = Mathf.FloorToInt(width / spaceX);
+
+        SpawnPassengers();
+    }
+
+
+    void SpawnPassengers()
+    {
+        colorMap.Clear();
+
+        // Grid cuc bo cho khu vuc spawn, index theo (r,c) cua khu vuc nay
+        // (khac voi row/column cua PassengerGrid toan cuc)
+        GridNode[,] localGrid = new GridNode[rows, columns];
+
+        for (int r = 0; r < rows; r++)
+        {
+            for (int c = 0; c < columns; c++)
+            {
+                Vector3 pos = startPoint.position + new Vector3(c * spaceX, 0.5f, -r * spaceZ);
+
+                GridNode node = PassengerGrid.Instance.GetNearestNode(pos);
+
+                // node da bi chiem -> bo qua de khong 2 passenger chong len 1 o
+                if (!node.walkable) continue;
+
+                localGrid[r, c] = node;
+            }
+        }
+
+
+        GenerateClusters(localGrid);
+
+        foreach (var pair in colorMap)
+        {
+            GridNode node = pair.Key;
+
+            // spawn dung tam o luoi de passenger khop voi grid
+            Vector3 spawnPos = node.worldPosition;
+            spawnPos.y = startPoint.position.y + 0.5f;
+
+            Passenger p = Instantiate(passengerPrefab, spawnPos, Quaternion.identity, startPoint);
+
+
+            p.SetColor(pair.Value);
+
+            PassengerManager.Instance.Register(p);
+
+            node.occupant = p;
+            node.walkable = false;
+
+            p.CurrentNode = node;
+        }
+    }
+
+    /// <summary>
+    /// Quet qua tung o cua khu vuc spawn theo thu tu hang/cot.
+    /// Voi moi o con trong, "phat trien" mot hinh chu nhat (width x height)
+    /// bat dau tu o do de tao thanh 1 cluster mot mau duy nhat.
+    /// </summary>
+    void GenerateClusters(GridNode[,] localGrid)
+    {
+        bool[,] used = new bool[rows, columns];
+
+        for (int r = 0; r < rows; r++)
+        {
+            for (int c = 0; c < columns; c++)
+            {
+                if (used[r, c]) continue;
+                if (localGrid[r, c] == null) continue;
+
+                // Chon kich thuoc muc tieu cho cluster nay, co dien tich nam trong [minClusterSize, maxClusterSize]
+                int targetArea = Random.Range(minClusterSize, maxClusterSize + 1);
+
+                int targetWidth = Mathf.Max(1, Mathf.RoundToInt(Mathf.Sqrt(targetArea)));
+                int targetHeight = Mathf.Max(1, Mathf.CeilToInt((float)targetArea / targetWidth));
+
+                // Doi ngau nhien chieu rong/cao de cluster khong bi lap lai mot kieu hinh
+                if (Random.value < 0.5f)
+                {
+                    (targetWidth, targetHeight) = (targetHeight, targetWidth);
+                }
+
+                Vector2Int actualSize = GetActualRectSize(localGrid, used, r, c, targetWidth, targetHeight);
+
+                if (actualSize.x <= 0 || actualSize.y <= 0) continue;
+
+                PassengerColor color = colors[Random.Range(0, colors.Count)];
+
+                for (int dr = 0; dr < actualSize.y; dr++)
+                {
+                    for (int dc = 0; dc < actualSize.x; dc++)
+                    {
+                        int nr = r + dr;
+                        int nc = c + dc;
+
+                        used[nr, nc] = true;
+                        colorMap[localGrid[nr, nc]] = color;
+                    }
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Tinh kich thuoc hinh chu nhat thuc te co the tao duoc bat dau tu (r,c),
+    /// gioi han boi maxWidth/maxHeight mong muon, bien khu vuc spawn va cac o da dung/khong the di chuyen.
+    /// </summary>
+    Vector2Int GetActualRectSize(GridNode[,] localGrid, bool[,] used, int r, int c, int maxWidth, int maxHeight)
+    {
+        // Tinh chieu rong toi da co the dung tu (r,c) tren cung 1 hang
+        int width = 0;
+        while (width < maxWidth &&
+               c + width < columns &&
+               localGrid[r, c + width] != null &&
+               !used[r, c + width])
+        {
+            width++;
+        }
+
+        if (width == 0) return Vector2Int.zero;
+
+        // Tinh chieu cao toi da: moi hang them vao phai co du "width" o hop le
+        int height = 1;
+        while (height < maxHeight)
+        {
+            int nr = r + height;
+
+            if (nr >= rows) break;
+
+            bool rowValid = true;
+
+            for (int dc = 0; dc < width; dc++)
+            {
+                int nc = c + dc;
+
+                if (localGrid[nr, nc] == null || used[nr, nc])
+                {
+                    rowValid = false;
+                    break;
+                }
+            }
+
+            if (!rowValid) break;
+
+            height++;
+        }
+
+        return new Vector2Int(width, height);
+    }
+}
+
+
+########################################
+FILE: Assets/Scripts/RVO/RVOAgent.cs
+########################################
+
+using NUnit.Framework;
+using System.Collections.Generic;
+using UnityEngine;
+
+public class RVOAgent : MonoBehaviour
+{
+    [Header("Movement")]
+    public float radius = 0.5f;
+    public float maxSpeed = 3.0f;
+    public float neighborDistance = 2f;
+
+    [HideInInspector] public Vector3 velocity;          // van toc thuc te
+    [HideInInspector] public Vector3 preferredVelocity; // van toc mong muon
+    [HideInInspector] public List<RVOAgent> neighbors = new();
+
+    [Header("Avoidance")]
+    public float seperationWeight = 2f;
+    public float timeHorizon = 1f; // du doan trc 1 giay
+
+    [Header("Push Force")]
+    public float pushDistance = 1.2f;
+    public float pushStrength = 2.5f;
+
+    bool isRegistered;
+    private void Awake()
+    {
+        ClampRadiusToGrid();
+    }
+    /// <summary>
+    /// Bao ve chong lai truong hop radius bi dat qua lon so voi kich thuoc o luoi
+    /// (vi du radius = 0.75 nhung cellSize = 1 -> 2 agent dung o 2 o ke nhau da bi
+    /// tinh nham la dang de len nhau, gay day/xo day lien tuc du dang dung yen).
+    /// Radius toi da duoc gioi han o mot ti le an toan cua cellSize.
+    /// </summary>
+    void ClampRadiusToGrid()
+    {
+        if (PassengerGrid.Instance == null) return;
+        float cell = PassengerGrid.Instance.cellSize;
+        float maxSafeRadius = cell * 0.4f;
+        if (radius > maxSafeRadius)
+        {
+            //Debug.LogWarning($"[RVOAgent] radius ({radius}) qua lon so voi cellSize ({cell}), " +
+                              //$"tu dong giam xuong {maxSafeRadius} de tranh 2 agent o o ke nhau bi tinh nham la dang cham nhau.");
+            radius = maxSafeRadius;
+        }
+    }
+
+    public void Register()
+    {
+        if ((isRegistered))
+        {
+            return;
+        }
+
+        isRegistered = true;
+
+        RVOSimulator.Instance.Register(this);
+    }
+
+    public void UnRegister()
+    {
+        if (!isRegistered) 
+            return;
+
+        isRegistered = false;
+
+        velocity = Vector3.zero;
+        preferredVelocity = Vector3.zero;
+        neighbors.Clear();
+        RVOSimulator.Instance.Unregister(this);
+    }
+
+    private void OnDestroy()
+    {
+        UnRegister();
+    }
+}
+
+
+
+########################################
+FILE: Assets/Scripts/RVO/RVOSimulator.cs
+########################################
+
+using NUnit.Framework;
+using System.Collections.Generic;
+using UnityEngine;
+
+public class RVOSimulator : MonoBehaviour
+{
+    public static RVOSimulator Instance;
+
+    List<RVOAgent> agents = new();
+
+    private void Awake()
+    {
+        Instance = this;
+    }
+
+    public void Register(RVOAgent agent)
+    {
+        if (!agents.Contains(agent))
+            agents.Add(agent);
+    }
+
+    public void Unregister(RVOAgent agent)
+    {
+        agents.Remove(agent);
+    }
+
+    private void FixedUpdate()
+    {
+        FindNeighbors();
+
+        foreach(RVOAgent agent in agents)
+        {
+            ComputeVelocity(agent);
+        }
+
+        foreach(RVOAgent agent in agents)
+        {
+            Vector3 nextPos  = agent.transform.position + agent.velocity * Time.deltaTime;
+
+            nextPos = MovementBoundary.Instance.Clamp(nextPos);
+
+            agent.transform.position = nextPos;
+        }    
+            
+    }
+
+    // tim cac agent gan la hang xom
+    void FindNeighbors() 
+    {
+        foreach(RVOAgent agent in agents)
+        {
+            agent.neighbors.Clear();
+
+            foreach(RVOAgent other in agents)
+            {
+                if(agent == other)
+                {
+                    continue;
+                }
+
+                float sqrtDistance = (agent.transform.position - other.transform.position).sqrMagnitude;
+
+                if (sqrtDistance <= agent.neighborDistance * agent.neighborDistance)
+                {
+                    agent.neighbors.Add(other);
+                }
+            }
+        }
+    }
+
+    // tinh luc tranh giua hai agent
+
+    void ComputeVelocity(RVOAgent agent)
+    {
+        Vector3 avoidance = Vector3.zero;
+
+        foreach (RVOAgent other in agent.neighbors)
+        {
+            float minDistance = agent.radius + other.radius;
+
+            // Xư li va cham thuc te hien tai. Neu hai agent de len nhau o hien tai thi se day manh ra va uu tien hon avoidance du doan ben duoi
+            // giup giai quyet overlap nahnh va dut khoat hon
+
+            Vector3 currentOffset = agent.transform.position - other.transform.position;
+
+            currentOffset.y = 0f;
+
+            float currentDistance = currentOffset.magnitude;
+
+            if(currentDistance < minDistance)
+            {
+                if(currentDistance < 0.0001f)
+                {
+                    currentOffset = Random.insideUnitCircle;
+                    currentOffset.y = 0;
+                    currentDistance = 0.0001f;
+                }
+
+                float overlapStrength = (minDistance - currentDistance) / minDistance;
+
+                // Nhan 2 de uu tien xu ly va chma thuc te hon la du doan
+                avoidance += currentOffset.normalized * overlapStrength * 1.2f;
+            }
+
+            // Du doan va cham trong tuong lai
+            Vector3 futureA = agent.transform.position + agent.velocity * agent.timeHorizon;
+ 
+            Vector3 futureB = other.transform.position + other.velocity * other.timeHorizon;
+
+            Vector3 offset = futureA - futureB;
+
+            float distance = offset.magnitude;
+
+            
+
+            // Neu trong tuong lai co va cham
+
+            if(distance < minDistance)
+            {
+                if(distance < 0.0001f)
+                {
+                    offset = Random.insideUnitCircle;
+                    offset.y = 0;
+                    distance = 0.001f;
+                }
+
+                float strength = (minDistance - distance) / minDistance;
+
+                avoidance += offset.normalized * strength;
+            }
+        }
+
+        avoidance *= agent.seperationWeight;
+
+        Vector3 pushForce = Vector3.zero;
+
+        foreach(RVOAgent other in agent.neighbors)
+        {
+            Vector3 offset = agent.transform.position - other.transform.position;
+            offset.y = 0f;
+
+            float distance = offset.magnitude;
+
+            if(distance < 0.001f)
+            {
+                offset = Random.insideUnitCircle;
+                offset.y = 0;
+                distance = 0.001f;
+            }
+
+            float safeDistance = agent.pushDistance + other.radius;
+
+            if(distance < safeDistance)
+            {
+                // 0 -> 1
+                float t = 1f - distance/safeDistance;
+
+                // Smooth giup luc tang dan
+
+                t = t * t * (3f - 2f * t);
+
+                pushForce += offset.normalized * t * agent.pushStrength;
+            }
+        }
+
+
+        Vector3 desired = agent.preferredVelocity + avoidance + pushForce;
+
+
+        // Toc do phan hoi de agent ra nhanh hon khi va cham : 10f 
+        agent.velocity = Vector3.Lerp(agent.velocity,desired,8f * Time.fixedDeltaTime);
+
+        agent.velocity = Vector3.ClampMagnitude(agent.velocity, agent.maxSpeed);
+    }
+}
+
+
+

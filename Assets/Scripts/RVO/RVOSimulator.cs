@@ -132,7 +132,39 @@ public class RVOSimulator : MonoBehaviour
 
         avoidance *= agent.seperationWeight;
 
-        Vector3 desired = agent.preferredVelocity + avoidance;
+        Vector3 pushForce = Vector3.zero;
+
+        foreach(RVOAgent other in agent.neighbors)
+        {
+            Vector3 offset = agent.transform.position - other.transform.position;
+            offset.y = 0f;
+
+            float distance = offset.magnitude;
+
+            if(distance < 0.001f)
+            {
+                offset = Random.insideUnitCircle;
+                offset.y = 0;
+                distance = 0.001f;
+            }
+
+            float safeDistance = agent.pushDistance + other.radius;
+
+            if(distance < safeDistance)
+            {
+                // 0 -> 1
+                float t = 1f - distance/safeDistance;
+
+                // Smooth giup luc tang dan
+
+                t = t * t * (3f - 2f * t);
+
+                pushForce += offset.normalized * t * agent.pushStrength;
+            }
+        }
+
+
+        Vector3 desired = agent.preferredVelocity + avoidance + pushForce;
 
 
         // Toc do phan hoi de agent ra nhanh hon khi va cham : 10f 
