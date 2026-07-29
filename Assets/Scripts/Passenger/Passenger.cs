@@ -22,11 +22,7 @@ public class Passenger : MonoBehaviour
     // Ktra xem passenger co dang duoc dispatch ve bus hay ko (dung de khoa theo mau tranh tinh trang dispatch 1 nhom khac cung mau trong khi nhom nay chua len het xe)
     bool isDispatchedToBus;
     // Dem so passenger cua tung mau dang duoc dispatch di ve bus ( chua len xe xong)
-    static readonly Dictionary<PassengerColor, int> movingCountByColor = new();
-
-
-    const int reservationWindow = 1; // so o phia trc dc giu ali tinh tu pathindecx hien tai
-    readonly HashSet<GridNode> reservedWindow = new HashSet<GridNode>();
+    static readonly Dictionary<PassengerColor, int> movingCountByColor = new();   
     GridNode finalTarget;  // dich cuoi cung (bus targetNode hoac target cua MoveToTargetNode), dung de re-path
 
     private void Start()
@@ -56,6 +52,8 @@ public class Passenger : MonoBehaviour
                 if(isDispatchedToBus)
                 {
                     isDispatchedToBus = false;
+
+                  //  DecrementMoving(passengerColor);
                 }
 
                 // Căn chỉnh vị trí chính xác vào giữa ô lưới
@@ -68,13 +66,6 @@ public class Passenger : MonoBehaviour
             }
 
             return;
-        }
-
-        if ((IsWindowBlocked()))
-        {
-            RequestPathTo(finalTarget);
-
-            if (path == null || pathIndex >= path.Count) return;
         }
 
         Vector3 targetPos = path[pathIndex].worldPosition;
@@ -95,8 +86,6 @@ public class Passenger : MonoBehaviour
             CurrentNode.occupant = this;
 
             pathIndex++;
-
-            ReserveWindow();
         }
     }
 
@@ -136,85 +125,7 @@ public class Passenger : MonoBehaviour
         bodyRenderer.material = color.material;
     }
 
-    /// <summary>
-    /// Giu truoc reservationWindow o ke tiep tren path ( tu pathIndex hien tai) giai phong cac o da giu trc do khong con nam trong cua so
-    /// </summary>
-    void ReserveWindow()
-    {
-        HashSet<GridNode> desired = new HashSet<GridNode>();
-
-        if (path != null)
-        {
-            int end = Mathf.Min(pathIndex + reservationWindow, path.Count - 1);
-
-            for (int i = pathIndex;  i <= end; i++)
-            {
-                desired.Add(path[i]);
-            }
-        }
-
-        // Giai phong nhung o ko con nam trong cua so moi
-        foreach(GridNode node in reservedWindow)
-        {
-            if(!desired.Contains(node) && node.reservedBy == this)
-            {
-                node.reservedBy = null;
-            }
-        }
-
-        // Chiem cac o trong cua so con trong hoac dang la cua chinh minh
-        foreach(GridNode node in desired)
-        {
-            if(node.reservedBy == null && node.reservedBy == this)
-            {
-                node.reservedBy = this;
-            }
-        }
-
-        reservedWindow.Clear();
-
-        foreach(GridNode node in desired)
-        {
-            if(node.reservedBy == this)
-            {
-                reservedWindow.Add(node);
-            }
-        }
-    }
-
-    public void ReleaseAllReservations()
-    {
-        foreach(GridNode node in reservedWindow)
-        {
-            if(node.reservedBy == this)
-            {
-                node.reservedBy = null;
-            }
-        }
-
-        reservedWindow.Clear();
-    }
-
-    bool IsWindowBlocked()
-    {
-        if (path == null) return false;
-
-        int end = Mathf.Min(pathIndex + reservationWindow, path.Count - 1);
-
-        for (int i = pathIndex; i <= end; i++)
-        {
-            GridNode node = path[i];
-
-            if (node.reservedBy != null && node.reservedBy != this)
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    GridNode FindMatchingBusTargetNode()
+   GridNode FindMatchingBusTargetNode()
     {
         Bus bus = BusStation.instance.GetBusByColor(passengerColor);
         return bus != null ? bus.targetNode : null;
@@ -222,8 +133,7 @@ public class Passenger : MonoBehaviour
 
     public void RequestPathTo(GridNode target)
     {
-        ReleaseAllReservations();
-
+ 
         finalTarget = target;
         pathIndex = 0;
 
@@ -244,8 +154,6 @@ public class Passenger : MonoBehaviour
             agent.UnRegister();
             return;
         }
-
-        ReserveWindow();
     }
 
     /// <summary>
@@ -339,8 +247,6 @@ public class Passenger : MonoBehaviour
             isDispatchedToBus = false;
             DecrementMoving(passengerColor);
         }
-
-        ReleaseAllReservations();
 
         // Giải phóng ô hiện tại
         if (CurrentNode != null)
@@ -462,21 +368,21 @@ public class Passenger : MonoBehaviour
 
             Passenger passenger = node.occupant;
 
-            if(passenger == null) continue;
+            if (passenger == null) continue;
 
-            if(passenger.PassengerColor != PassengerColor) continue;
+            if (passenger.PassengerColor != PassengerColor) continue;
 
             result.Add(passenger);
 
-            foreach(GridNode neighbour in node.GetNeighbours())
+            foreach (GridNode neighbour in node.GetNeighbours())
             {
-                if(neighbour == null) continue;
+                if (neighbour == null) continue;
 
-                if(visited.Contains(neighbour)) continue;
+                if (visited.Contains(neighbour)) continue;
 
                 Passenger neighbourPassenger = neighbour.occupant;
 
-                if(neighbourPassenger == null) continue;
+                if (neighbourPassenger == null) continue;
 
                 if (neighbourPassenger.PassengerColor != PassengerColor) continue;
 
@@ -488,6 +394,50 @@ public class Passenger : MonoBehaviour
         return result;
     }
 
+    ////public List<Passenger> GetConnectedPassengers()
+    ////{
+    ////    List<Passenger> result = new();
+
+    ////    Queue<GridNode> queue = new();
+    ////    HashSet<GridNode> visited = new();
+
+    ////    queue.Enqueue(CurrentNode);
+    ////    visited.Add(CurrentNode);
+
+    ////    while (queue.Count > 0)
+    ////    {
+    ////        GridNode node = queue.Dequeue();
+
+    ////        Passenger passenger = node.occupant;
+
+    ////        if (passenger == null) continue;
+
+    ////        if (passenger.PassengerColor != PassengerColor) continue;
+
+    ////        result.Add(passenger);
+
+    ////        // Chỉ kiểm tra 4 hướng trực tiếp (Không tính chéo)
+    ////        GridNode[] cardinalNeighbours = new GridNode[] { node.Up, node.Down, node.Left, node.Right };
+
+    ////        foreach (GridNode neighbour in cardinalNeighbours)
+    ////        {
+    ////            if (neighbour == null) continue;
+
+    ////            if (visited.Contains(neighbour)) continue;
+
+    ////            Passenger neighbourPassenger = neighbour.occupant;
+
+    ////            if (neighbourPassenger == null) continue;
+
+    ////            if (neighbourPassenger.PassengerColor != PassengerColor) continue;
+
+    ////            visited.Add(neighbour);
+    ////            queue.Enqueue(neighbour);
+    ////        }
+    ////    }
+
+    ////    return result;
+    ////}
 
 }
 

@@ -56,8 +56,6 @@ public class AStar : MonoBehaviour
 
                 if(!neighbour.walkable && neighbour != targetNode) continue;
 
-                if (neighbour.reservedBy != null && neighbour.reservedBy != currentPassenger && neighbour != targetNode) continue;
-
                 if(closedList.Contains(neighbour)) continue;
 
                 int congestion = 0;

@@ -12,9 +12,6 @@ public class GridNode
 
     public Passenger occupant;
 
-    // Reservation grid
-    public Passenger reservedBy;
-
     public GridNode parent;
     public GridNode Up;
     public GridNode Down;
