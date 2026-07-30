@@ -68,7 +68,7 @@ public class PassengerSpawnAreas : MonoBehaviour
 
             // spawn dung tam o luoi de passenger khop voi grid
             Vector3 spawnPos = node.worldPosition;
-            spawnPos.y = startPoint.position.y + 0.5f;
+            spawnPos.y = startPoint.position.y;
 
             Passenger p = Instantiate(passengerPrefab, spawnPos, Quaternion.identity, startPoint);
 

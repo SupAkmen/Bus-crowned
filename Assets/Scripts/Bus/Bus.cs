@@ -110,7 +110,7 @@ public class Bus : MonoBehaviour
 
     IEnumerator FollowLeavePath()
     {
-        yield return new WaitForSeconds(0.5f);
+        yield return new WaitForSeconds(0.3f);
 
         if (parentLane == null) 
             yield break;

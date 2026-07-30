@@ -65,7 +65,7 @@ public class BusStation : MonoBehaviour
         {
             BusLane lane = busLanes[i];
 
-            Bus bus = SpawnBus(ticketQueue[ticketIndex], lane.parkingPosition.position + new Vector3(0,0.63f,0), lane.transform);
+            Bus bus = SpawnBus(ticketQueue[ticketIndex], lane.parkingPosition.position, lane.transform);
 
             lane.SetParkingBus(bus);
             RegisterParkingBus(bus);

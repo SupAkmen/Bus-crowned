@@ -79,7 +79,7 @@ public class BusLane : MonoBehaviour
             Bus nextBus  = garageBuses[0];
             garageBuses.RemoveAt(0);
 
-            yield return StartCoroutine(MoveBusToPosition(nextBus, parkingPosition.position + new Vector3(0,0.63f,0)));
+            yield return StartCoroutine(MoveBusToPosition(nextBus, parkingPosition.position));
 
             parkingBus = nextBus;
 

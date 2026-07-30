@@ -43,11 +43,6 @@ public class PassengerSelector : MonoBehaviour
                 }
             }
         }
-
     }
-
-
-
-
 }
 
