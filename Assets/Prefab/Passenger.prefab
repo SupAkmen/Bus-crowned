@@ -87,8 +87,8 @@ BoxCollider:
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 3
-  m_Size: {x: 1, y: 1.4, z: 1}
-  m_Center: {x: 0, y: 0.7301252, z: 0}
+  m_Size: {x: 0.69504553, y: 1.376996, z: 0.6002094}
+  m_Center: {x: -0.008484572, y: 0.7416272, z: -0.0018911064}
 --- !u!114 &7134490945767144396
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -102,6 +102,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   bodyRenderer: {fileID: 1008328108367650061}
+  rotationSpeed: 720
+  targetBus: {fileID: 0}
 --- !u!114 &3757459487146407319
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -115,7 +117,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   radius: 0.35
-  maxSpeed: 5
+  maxSpeed: 10
   neighborDistance: 1.5
   velocity: {x: 0, y: 0, z: 0}
   preferredVelocity: {x: 0, y: 0, z: 0}
@@ -206,7 +208,7 @@ PrefabInstance:
     - target: {fileID: 3178214683682572079, guid: d620ee1cf17bc08418aa279ba32fa71f, type: 3}
       propertyPath: 'm_Materials.Array.data[1]'
       value: 
-      objectReference: {fileID: 0}
+      objectReference: {fileID: 2100000, guid: 84df6980ef29f5043b3bec074696d624, type: 2}
     - target: {fileID: 8793476358973411300, guid: d620ee1cf17bc08418aa279ba32fa71f, type: 3}
       propertyPath: m_Name
       value: Character
@@ -214,7 +216,10 @@ PrefabInstance:
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
-    m_AddedComponents: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 8793476358973411300, guid: d620ee1cf17bc08418aa279ba32fa71f, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1644439238721129413}
   m_SourcePrefab: {fileID: 100100000, guid: d620ee1cf17bc08418aa279ba32fa71f, type: 3}
 --- !u!23 &1008328108367650061 stripped
 MeshRenderer:
@@ -226,3 +231,24 @@ Transform:
   m_CorrespondingSourceObject: {fileID: 349002784900378630, guid: d620ee1cf17bc08418aa279ba32fa71f, type: 3}
   m_PrefabInstance: {fileID: 2442363286438484514}
   m_PrefabAsset: {fileID: 0}
+--- !u!1 &6624144487158961606 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 8793476358973411300, guid: d620ee1cf17bc08418aa279ba32fa71f, type: 3}
+  m_PrefabInstance: {fileID: 2442363286438484514}
+  m_PrefabAsset: {fileID: 0}
+--- !u!111 &1644439238721129413
+Animation:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6624144487158961606}
+  m_Enabled: 1
+  serializedVersion: 4
+  m_Animation: {fileID: 0}
+  m_Animations: []
+  m_WrapMode: 0
+  m_PlayAutomatically: 1
+  m_AnimatePhysics: 0
+  m_UpdateMode: 0
+  m_CullingType: 0

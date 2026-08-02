@@ -20,26 +20,35 @@ public class PassengerSelector : MonoBehaviour
             if (Physics.Raycast(ray, out RaycastHit hit))
             {
                 Passenger p = hit.collider.GetComponentInParent<Passenger>();
+
                 if (p != null && p.CurrentNode != null)
                 {
-                    if(Passenger.IsColorMoving(p.PassengerColor))
+                    Bus nearstBus = BusStation.instance.GetNearestBusByColor(p.PassengerColor, p.transform.position);
+
+                    if (nearstBus == null) return;
+
+                    if (Passenger.IsBusMoving(nearstBus))
                     {
-                        return;
+                        return; // Chi bus nay dang ban, bus khac cung mau van dispatch duoc binh thuong
                     }
 
                     List<Passenger> group = p.GetConnectedPassengers();
                     // Dùng MoveGroup để tạm mở walkable cho cả nhóm trước khi tìm đường
                     // Check the number of available seat in bus same color
-                    int availablesSeat = BusStation.instance.GetAvailableSeatByColor(p.PassengerColor);
+                    int availablesSeat = nearstBus.GetAvailableSeat();
 
-                    if (availablesSeat >= 0)
+                    // Passenger move = availableSeat 
+                    int moveCount = Mathf.Min(group.Count, availablesSeat);
+                    List<Passenger> moveGroup = group.GetRange(0, moveCount);
+
+                    // Gan san targetBus cho ca nhom trc khi dispatch dam bao ca nhom ve cung 1 bus, ko bi tach giua chung
+                    foreach(var member in moveGroup)
                     {
-                        // Passenger move = availableSeat 
-                        int moveCount = Mathf.Min(group.Count, availablesSeat);
-                        List<Passenger> moveGroup = group.GetRange(0, moveCount);
-
-                        Passenger.MoveGroup(moveGroup);
+                        member.targetBus = nearstBus;
                     }
+
+                    StartCoroutine(Passenger.MoveGroup(moveGroup));
+
                 }
             }
         }

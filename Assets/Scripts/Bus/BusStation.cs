@@ -119,7 +119,6 @@ public class BusStation : MonoBehaviour
         public int capacity;
     }
 
-
     List<BusTicket> BuiltBusTicketQueue()
     {
         List<PassengerColor> colors = PassengerManager.Instance.GetAllColorsPresent();
@@ -178,6 +177,8 @@ public class BusStation : MonoBehaviour
 
     }
 
+   
+
     Bus SpawnBus(BusTicket ticket,Vector3 position,Transform parent)
     {
         // parent = lane.transform de Bus.GetComponentInParent<BusLane>() hoat dong dung
@@ -211,6 +212,28 @@ public class BusStation : MonoBehaviour
     public void UnRegisterParkingBus(Bus bus)
     {
         parkingBusList.Remove(bus);
+    }
+
+    public Bus GetNearestBusByColor(PassengerColor color, Vector3 fromPosition)
+    {
+        Bus best = null;
+
+        float bestSqrtDist = float.MaxValue;
+
+        foreach(var bus in parkingBusList)
+        {
+            if(bus.passengerColor != color || bus.GetAvailableSeat() <= 0) continue;
+
+            float sqrtDist = (bus.transform.position - fromPosition).sqrMagnitude;
+
+            if(sqrtDist < bestSqrtDist)
+            {
+                bestSqrtDist = sqrtDist;
+                best = bus;
+            }
+        }
+
+        return best;
     }
 
     /// <summary>

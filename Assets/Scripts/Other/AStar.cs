@@ -58,24 +58,20 @@ public class AStar : MonoBehaviour
 
                 if(closedList.Contains(neighbour)) continue;
 
-                int congestion = 0;
+                //int congestion = 0;
 
-                if(neighbour.occupant != null && neighbour.occupant != currentPassenger)
-                {
-                    congestion = 30;
-                }
+                //if(neighbour.occupant != null && neighbour.occupant != currentPassenger)
+                //{
+                //    congestion = 30;
+                //}
                 // Truoc day: reservedBy la hard-block (continue), khien ca nhom bi ket
                 // vi passenger dau tien reserve het hanh lang hep, nhung nguoi con lai
                 // van CAN di qua chinh hanh lang do (khong co duong nao khac).
                 // Gio chuyen thanh phi phat de uu tien tranh, nhung van cho phep di qua
                 // (giong nguoi ta xep hang di theo sau nhau ngoai doi thuc)
 
-                //if (neighbour.reservedBy != null && neighbour.reservedBy != currentPassenger && neighbour != targetNode)
-                //{
-                //    congestion += 30;
-                //}    
-
-                int newCost = currentNode.gCost + GetDistance(currentNode, neighbour) + congestion;
+                //int newCost = currentNode.gCost + GetDistance(currentNode, neighbour) + congestion;
+                int newCost = currentNode.gCost + GetDistance(currentNode, neighbour);
 
                 if (newCost < neighbour.gCost || !openList.Contains(neighbour))
                 {

@@ -1,6 +1,7 @@
 using NUnit.Framework;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEditor.Experimental.GraphView;
 using UnityEngine;
 
@@ -15,15 +16,20 @@ public class Passenger : MonoBehaviour
     int pathIndex;
 
     RVOAgent agent;
-
     bool isEntering;
     // đang trong quá trình di chuyển theo path
-    bool isMoving;   
+    bool isMoving;
     // Ktra xem passenger co dang duoc dispatch ve bus hay ko (dung de khoa theo mau tranh tinh trang dispatch 1 nhom khac cung mau trong khi nhom nay chua len het xe)
     bool isDispatchedToBus;
     // Dem so passenger cua tung mau dang duoc dispatch di ve bus ( chua len xe xong)
-    static readonly Dictionary<PassengerColor, int> movingCountByColor = new();   
+    static readonly Dictionary<PassengerColor, int> movingCountByColor = new();
     GridNode finalTarget;  // dich cuoi cung (bus targetNode hoac target cua MoveToTargetNode), dung de re-path
+
+    [Header("Rotation")]
+    [SerializeField] float rotationSpeed = 720f;
+    Quaternion idleRotation;
+
+    public Bus targetBus; // Bus cu the ma passenger dang huong toi 
 
     private void Start()
     {
@@ -34,6 +40,7 @@ public class Passenger : MonoBehaviour
         float cell = PassengerGrid.Instance != null ? PassengerGrid.Instance.cellSize : 1f;
 
         StartCoroutine(AutoGroupRoutine());
+        idleRotation = transform.rotation;
     }
 
     private void Update()
@@ -48,12 +55,12 @@ public class Passenger : MonoBehaviour
                 isMoving = false;
                 agent.preferredVelocity = Vector3.zero;
                 agent.velocity = Vector3.zero;
+                agent.UnRegister();
 
-                if(isDispatchedToBus)
+                if (isDispatchedToBus)
                 {
                     isDispatchedToBus = false;
-
-                  //  DecrementMoving(passengerColor);
+                    DecrementMoving(targetBus);
                 }
 
                 // Căn chỉnh vị trí chính xác vào giữa ô lưới
@@ -65,6 +72,8 @@ public class Passenger : MonoBehaviour
                 }
             }
 
+            transform.rotation = Quaternion.RotateTowards(transform.rotation, idleRotation, rotationSpeed * Time.deltaTime);
+
             return;
         }
 
@@ -72,8 +81,17 @@ public class Passenger : MonoBehaviour
         Vector3 dir = (targetPos - transform.position);
         dir.y = 0f;   // game top-down: chi di chuyen tren mat phang XZ
 
-        float speed = Random.Range(agent.maxSpeed - 1.5f,agent.maxSpeed);
+        float speed = Random.Range(agent.maxSpeed - 1.5f, agent.maxSpeed);
         agent.preferredVelocity = dir.normalized * speed;
+
+        Vector3 faceDir = agent.velocity;
+        faceDir.y = 0f;
+
+        if(faceDir.sqrMagnitude > 0.01f)
+        {
+            Quaternion targetPosition = Quaternion.LookRotation(faceDir);
+            transform.rotation = Quaternion.RotateTowards(transform.rotation, targetPosition, rotationSpeed * Time.deltaTime);
+        }
 
         if (dir.magnitude < 0.3f)
         {
@@ -89,32 +107,34 @@ public class Passenger : MonoBehaviour
         }
     }
 
+    static readonly Dictionary<Bus, int> movingCountByBus = new();
+
     /// <summary>
     /// Kiem tra xem mau nay hien co dang co passenger nao dang duoc disptach ve bus hay khong, passengerselector se dung ham nay de chan click chon them
     /// cung mau khi dang co nhom di chuyen tranh tinh trang dispatch chong len nhau lam ngheo bus
     /// </summary>
     /// <param name="passengerColor"></param>
     /// <returns></returns>
-    public static bool IsColorMoving(PassengerColor passengerColor)
+    public static bool IsBusMoving(Bus bus)
     {
-        return passengerColor != null && movingCountByColor.TryGetValue(passengerColor, out var count) && count > 0;
+        return bus != null && movingCountByBus.TryGetValue(bus, out var count) && count > 0;
     }
 
-    static void IncrementMoving(PassengerColor passengerColor)
+    static void IncrementMoving(Bus bus)
     {
-        if (passengerColor == null) return;
+        if (bus == null) return;
 
-        movingCountByColor.TryGetValue(passengerColor, out int count);
-        movingCountByColor[passengerColor] = count + 1;
+        movingCountByBus.TryGetValue(bus, out int count);
+        movingCountByBus[bus] = count + 1;
     }
 
-    static void DecrementMoving(PassengerColor passengerColor)
+    static void DecrementMoving(Bus bus)
     {
-        if(passengerColor == null) return;
+        if (bus == null) return;
 
-        if(movingCountByColor.TryGetValue(passengerColor,out int count))
+        if (movingCountByBus.TryGetValue(bus, out int count))
         {
-            movingCountByColor[passengerColor] = Mathf.Max(0,count-1);
+            movingCountByBus[bus] = Mathf.Max(0, count - 1);
         }
     }
 
@@ -125,15 +145,22 @@ public class Passenger : MonoBehaviour
         bodyRenderer.material = color.material;
     }
 
-   GridNode FindMatchingBusTargetNode()
+    GridNode FindMatchingBusTargetNode()
     {
-        Bus bus = BusStation.instance.GetBusByColor(passengerColor);
+        // Neu da co bú dang bam va bú do van con cho -> giu nguyen, tranh doi bú giua duong
+        if(targetBus != null && targetBus.GetAvailableSeat() >0)
+        {
+            return targetBus.targetNode;
+        }
+
+        Bus bus = BusStation.instance.GetNearestBusByColor(passengerColor,transform.position);
+        targetBus = bus;    
         return bus != null ? bus.targetNode : null;
     }
 
     public void RequestPathTo(GridNode target)
     {
- 
+
         finalTarget = target;
         pathIndex = 0;
 
@@ -170,43 +197,117 @@ public class Passenger : MonoBehaviour
         return AStar.GetDistance(CurrentNode, target);
     }
 
+    static Dictionary<Passenger, int> ComputeLayers(List<Passenger> group)
+    {
+        Dictionary<Passenger, int> layer = new();
+
+        HashSet<GridNode> groupNodes = new(group.Select(p => p.CurrentNode));
+
+        Queue<Passenger> queue = new();
+
+        // Tim layer 0 : nhung nguoi co huong ra ngoai cum ( ko  bi bao vay het 8 huong)
+
+        foreach (Passenger p in group)
+        {
+            bool isEdge = false;
+
+            foreach (GridNode neighbour in p.CurrentNode.GetNeighbours())
+            {
+                if (neighbour == null || !groupNodes.Contains(neighbour))
+                {
+                    isEdge = true;
+                }
+            }
+
+            if (isEdge)
+            {
+                layer[p] = 0;
+                queue.Enqueue(p);
+            }
+        }
+
+        // Lan tu ngoai vao trong 
+
+        while (queue.Count > 0)
+        {
+            Passenger current = queue.Dequeue();
+
+            int curLayer = layer[current];
+
+            foreach (GridNode neighbour in current.CurrentNode.GetNeighbours())
+            {
+                if (neighbour == null || !groupNodes.Contains(neighbour)) continue;
+
+                Passenger np = neighbour.occupant;
+
+                if (np == null || layer.ContainsKey(np)) continue;
+
+                layer[np] = curLayer + 1;
+
+                queue.Enqueue(np);
+            }
+        }
+
+        // Truong hop bi sot
+
+        foreach (Passenger p in group)
+        {
+            if (!layer.ContainsKey(p))
+                layer[p] = int.MaxValue;
+        }
+
+        return layer;
+    }
 
     /// <summary>
     /// Gọi Move cho một nhóm passengers cùng lúc.
     /// Tạm mở walkable cho tất cả ô của nhóm trước khi tìm đường,
     /// để các passenger không chặn đường nhau.
     /// </summary>
-    public static void MoveGroup(List<Passenger> group)
+    public static IEnumerator MoveGroup(List<Passenger> group)
     {
-        // Uu tien passenger gan dich (bus) hon tim duong va giu o truoc
-        group.Sort((a, b) => a.GetDistanceToTarget().CompareTo(b.GetDistanceToTarget()));
+        if (group.Count == 0) yield break;
 
-        //Tạm mở walkable cho tất cả ô của nhóm
+        Dictionary<Passenger, int> layerOf = ComputeLayers(group);
+
+        // Mo walkable cho ca nhom
+
         foreach (Passenger p in group)
         {
             if (p.CurrentNode != null)
-            {
                 p.CurrentNode.walkable = true;
-            }
         }
 
-        // Tìm đường cho từng passenger
-        foreach (Passenger p in group)
-        {
-            p.MoveInternal();
+        // Gom theo layer, layer ngoai thi xu li truoc
 
-            // Neu tim duco duong thanh cong (dang di chuyen) -> khoa mau nay lai tranh mot nhom mau khac cung mau bi dispatch chong len luc nay
-            if(p.isMoving && !p.isDispatchedToBus)
+        var layerGroups = group.GroupBy(p => layerOf[p]).OrderBy(g => g.Key);
+
+        foreach(var layerGroup in layerGroups)
+        {
+            // Trong  1 layer uu tien gan bus hon
+            var sorted = layerGroup.OrderBy(p => p.GetDistanceToTarget());
+
+            foreach(Passenger p in sorted)
             {
-                p.isDispatchedToBus = true;
-                IncrementMoving(p.passengerColor);
+                p.MoveInternal();
+
+                if(p.isMoving && !p.isDispatchedToBus)
+                {
+                    p.isDispatchedToBus = true;
+                    IncrementMoving(p.targetBus);
+                }
             }
+
+            // Cho lop nay di chuyen ra ngoai roi moi den lop tiep
+
+            yield return new WaitForSeconds(0.5f);
         }
 
-        // Đánh dấu lại walkable = false cho những passenger chưa tìm được đường (vẫn đứng tại chỗ)
-        foreach (Passenger p in group)
+        // Danh dau lai walkable = false cho ai chua tim dc duong
+
+        foreach(Passenger p in group)
         {
-            if (p.CurrentNode != null)
+            if(p.CurrentNode  != null && !p.isMoving)
             {
                 p.CurrentNode.walkable = false;
                 p.CurrentNode.occupant = p;
@@ -236,16 +337,16 @@ public class Passenger : MonoBehaviour
 
     public void EnterBus(Bus bus)
     {
-        if(isEntering ) return;
+        if (isEntering) return;
 
         isEntering = true;
         isMoving = false;
 
         // Neu da len bus thanh cong -> giai phong mau nay
-        if(isDispatchedToBus)
+        if (isDispatchedToBus)
         {
             isDispatchedToBus = false;
-            DecrementMoving(passengerColor);
+            DecrementMoving(targetBus);
         }
 
         // Giải phóng ô hiện tại
@@ -289,7 +390,7 @@ public class Passenger : MonoBehaviour
         transform.SetParent(bus.transform);
 
         Destroy(gameObject);
-       
+
     }
 
     /// <summary>
@@ -393,51 +494,5 @@ public class Passenger : MonoBehaviour
 
         return result;
     }
-
-    ////public List<Passenger> GetConnectedPassengers()
-    ////{
-    ////    List<Passenger> result = new();
-
-    ////    Queue<GridNode> queue = new();
-    ////    HashSet<GridNode> visited = new();
-
-    ////    queue.Enqueue(CurrentNode);
-    ////    visited.Add(CurrentNode);
-
-    ////    while (queue.Count > 0)
-    ////    {
-    ////        GridNode node = queue.Dequeue();
-
-    ////        Passenger passenger = node.occupant;
-
-    ////        if (passenger == null) continue;
-
-    ////        if (passenger.PassengerColor != PassengerColor) continue;
-
-    ////        result.Add(passenger);
-
-    ////        // Chỉ kiểm tra 4 hướng trực tiếp (Không tính chéo)
-    ////        GridNode[] cardinalNeighbours = new GridNode[] { node.Up, node.Down, node.Left, node.Right };
-
-    ////        foreach (GridNode neighbour in cardinalNeighbours)
-    ////        {
-    ////            if (neighbour == null) continue;
-
-    ////            if (visited.Contains(neighbour)) continue;
-
-    ////            Passenger neighbourPassenger = neighbour.occupant;
-
-    ////            if (neighbourPassenger == null) continue;
-
-    ////            if (neighbourPassenger.PassengerColor != PassengerColor) continue;
-
-    ////            visited.Add(neighbour);
-    ////            queue.Enqueue(neighbour);
-    ////        }
-    ////    }
-
-    ////    return result;
-    ////}
-
 }
 

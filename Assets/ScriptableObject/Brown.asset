@@ -14,3 +14,4 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   colorName: Brown
   material: {fileID: 2100000, guid: 710706a313d24d644bcb6d6387478797, type: 2}
+  pixelColor: {r: 0.41509432, g: 0.2956568, b: 0.2956568, a: 0}

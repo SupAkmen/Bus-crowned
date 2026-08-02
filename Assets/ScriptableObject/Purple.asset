@@ -14,3 +14,4 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   colorName: Purple
   material: {fileID: 2100000, guid: ba42232c6545315499cd06be13ea98f3, type: 2}
+  pixelColor: {r: 0.7354902, g: 0.4764151, b: 1, a: 0}

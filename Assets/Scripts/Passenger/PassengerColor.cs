@@ -7,4 +7,7 @@ public class PassengerColor : ScriptableObject
 
     public Material material;
 
+    [Header("Image Mapping")]
+    public Color pixelColor;
+
 }

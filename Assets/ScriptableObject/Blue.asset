@@ -14,3 +14,4 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   colorName: Blue
   material: {fileID: 2100000, guid: 5a2e8eebb3cb04d48b43ee3bd65caed9, type: 2}
+  pixelColor: {r: 0.033018887, g: 1, b: 0.96174705, a: 0}
