@@ -88,20 +88,20 @@ public class PassengerGrid : MonoBehaviour
         return Nodes[row, column];
     }
 
-    private void OnDrawGizmos()
-    {
-        if (Nodes == null)
-            return;
+    //private void OnDrawGizmos()
+    //{
+    //    if (Nodes == null)
+    //        return;
 
-        foreach (GridNode node in Nodes)
-        {
-            Gizmos.color = node.walkable ? Color.white : Color.red;
+    //    foreach (GridNode node in Nodes)
+    //    {
+    //        Gizmos.color = node.walkable ? Color.white : Color.red;
 
-            Gizmos.DrawWireCube(
-                node.worldPosition,
-                new Vector3(cellSize, 0.05f, cellSize)
-            );
-        }
-    }
+    //        Gizmos.DrawWireCube(
+    //            node.worldPosition,
+    //            new Vector3(cellSize, 0.05f, cellSize)
+    //        );
+    //    }
+    //}
 
 }
