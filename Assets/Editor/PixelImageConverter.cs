@@ -22,8 +22,8 @@ using UnityEngine;
 public class PixelImageConverter : EditorWindow
 {
     Texture2D sourceImage;
-    int targetWidth = 20;
-    int targetHeight = 15;
+    int targetWidth = 32;
+    int targetHeight = 32;
 
     bool snapToPalette = false;
     PassengerColor[] palette;

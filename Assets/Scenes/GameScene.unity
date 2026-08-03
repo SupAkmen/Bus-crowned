@@ -6683,34 +6683,18 @@ MonoBehaviour:
   spaceZ: 0.5
   passengerPrefab: {fileID: 7134490945767144396, guid: 2223fddfd68e08b4097378602bdd3c3e, type: 3}
   colors:
-  - {fileID: 11400000, guid: 4f304d6fda0a2e148801fd769ab32024, type: 2}
-  - {fileID: 11400000, guid: 6a077349f2974e648a921f3540c8eaab, type: 2}
   - {fileID: 11400000, guid: 211289eaab823224a97f9dc13a07638b, type: 2}
   - {fileID: 11400000, guid: 7825e91e0cf165f4e8f45fa3da904594, type: 2}
-  - {fileID: 11400000, guid: fade777ecced6534584721913f9e2869, type: 2}
-  - {fileID: 11400000, guid: 81ee7d68cf69ece4286f4f9584130795, type: 2}
-  - {fileID: 11400000, guid: 4ac2f562234a3f34e96652cb00feb38b, type: 2}
-  - {fileID: 11400000, guid: a4df9956ed91cfd42888449270927e7a, type: 2}
-  - {fileID: 11400000, guid: ef960baf65cd96141bef7871723eaeac, type: 2}
-  - {fileID: 11400000, guid: a438fba2e3ca7f44a9fdb7f9731f0fc4, type: 2}
-  - {fileID: 11400000, guid: a323c2a9d3b170e4888e02512e3057b1, type: 2}
-  - {fileID: 11400000, guid: 09218f2e16e840c40bfbfa82f921bea9, type: 2}
-  - {fileID: 11400000, guid: d1baf22104ce5834cb2debc66cc2a2ff, type: 2}
   - {fileID: 11400000, guid: dd16c74e40573a44f9cb4fbb4b1d7e42, type: 2}
-  - {fileID: 11400000, guid: b979247654053a94b8f47ef17119d1a6, type: 2}
-  - {fileID: 11400000, guid: 1fc50522a4b26844b827a03709defcc7, type: 2}
-  - {fileID: 11400000, guid: 1eef9a5c1e609304087fe42214cf3461, type: 2}
-  - {fileID: 11400000, guid: 47a1fa16073f89341b3c2e26c49d040d, type: 2}
-  - {fileID: 11400000, guid: 1674d339516bbf5418e8752c96cfd70c, type: 2}
   minClusterSize: 4
   maxClusterSize: 10
-  layoutImage: {fileID: 2800000, guid: 38d17e4d0a31c664195832ff884f824a, type: 3}
+  layoutImage: {fileID: 0}
   snapToNearestColor: 1
   hueWeight: 4
   saturationWeight: 1.2
   valueWeight: 0.3
   achromaticSaturationThreshold: 0.15
-  colorMatchThreshold: 0.4
+  colorMatchThreshold: 0.35
   useValueSaturationBackgroundFilter: 0
   backgroundValueThreshold: 0.92
   backgroundSaturationThreshold: 0.1

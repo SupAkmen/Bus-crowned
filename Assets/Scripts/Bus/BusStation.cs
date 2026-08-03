@@ -2,6 +2,7 @@
 using JetBrains.Annotations;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 
 public class BusStation : MonoBehaviour
@@ -121,13 +122,15 @@ public class BusStation : MonoBehaviour
 
     List<BusTicket> BuiltBusTicketQueue()
     {
-        List<PassengerColor> colors = PassengerManager.Instance.GetAllColorsPresent();
+        List<PassengerColor> colors = PassengerManager.Instance.GetColorsOrderedByOuterness();
+            
+        colors = colors.OrderByDescending(c => PassengerManager.Instance.GetCountByColor(c)).ToList();
 
         List<Queue<BusTicket>> perColorQueues = new List<Queue<BusTicket>>();
 
         foreach(PassengerColor color in colors)
         {
-            int count = PassengerManager.Instance.getCountByColor(color);
+            int count = PassengerManager.Instance.GetCountByColor(color);
             int cap = busPrefab.capacityPerBus;
             int busesNeeded = Mathf.CeilToInt((float)count / cap);
 
@@ -160,24 +163,27 @@ public class BusStation : MonoBehaviour
             }
         }
 
-        // Cac bus con lai -> garage
-        foreach (Queue<BusTicket> q in perColorQueues)
+        //Cac bus con lai -> garage
+        bool addedAny = true;
+        while (addedAny)
         {
-            while (q.Count > 0)
+            addedAny = false;
+
+            foreach (Queue<BusTicket> q in perColorQueues) // perColorQueues đã sort desc theo count ở bước trên
             {
-                garageTickets.Add(q.Dequeue());
+                if (q.Count > 0)
+                {
+                    garageTickets.Add(q.Dequeue());
+                    addedAny = true;
+                }
             }
         }
-
-        Shuffle(garageTickets);
 
         parkingTickets.AddRange(garageTickets);
 
         return parkingTickets;
 
     }
-
-   
 
     Bus SpawnBus(BusTicket ticket,Vector3 position,Transform parent)
     {
@@ -192,7 +198,7 @@ public class BusStation : MonoBehaviour
 
     void Shuffle<T>(List<T> list)
     {
-        for(int i = 0; i < list.Count - 1; i++)
+        for(int i = list.Count - 1; i > 0; i--)
         {
             int j = Random.Range(0, i + 1);
 
