@@ -24,6 +24,12 @@ public class PassengerSelector : MonoBehaviour
                 if (p != null && p.CurrentNode != null)
                 {
                     Bus nearstBus = BusStation.instance.GetNearestBusByColor(p.PassengerColor, p.transform.position);
+                    
+                    // ko co bus cung mau tren parking => di chuyển ra wilcardbus
+                    if(nearstBus == null)
+                    {
+                        nearstBus = BusStation.instance.GetWildcardBusIfAcceptable(p.PassengerColor);
+                    }
 
                     if (nearstBus == null) return;
 

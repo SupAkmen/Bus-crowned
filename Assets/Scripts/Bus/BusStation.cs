@@ -4,6 +4,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
+using UnityEngine.UIElements.Experimental;
 
 public class BusStation : MonoBehaviour
 {
@@ -17,6 +18,8 @@ public class BusStation : MonoBehaviour
     // The list of car in parking 
     [HideInInspector] public List<Bus> parkingBusList = new List<Bus>();
 
+    [HideInInspector] public Bus wildcardBus;
+
     private void Awake()
     {
         instance = this;
@@ -24,6 +27,40 @@ public class BusStation : MonoBehaviour
     private void Start()
     {
         StartCoroutine(InitializeBusesRoutine());
+    }
+
+    public void RegisterWildcardBus(Bus bus)
+    {
+        wildcardBus = bus;
+    }
+
+    public void UnRegisterWildcardBus(Bus bus)
+    {
+        if (wildcardBus == bus)
+        {
+            wildcardBus = null;
+        }
+    }
+    public bool CanWildcardAccept(PassengerColor color)
+    {
+        if(wildcardBus == null || wildcardBus.GetAvailableSeat() <= 0)
+        {
+            return false;
+        }
+
+        foreach(var normalBus in parkingBusList)
+        {
+            if(normalBus == wildcardBus) continue;
+
+            if (normalBus.passengerColor == color) return false;
+        }
+
+        return true;
+    }
+
+    public Bus GetWildcardBusIfAcceptable(PassengerColor color)
+    {
+        return CanWildcardAccept(color) ? wildcardBus : null;
     }
 
     IEnumerator InitializeBusesRoutine()
@@ -270,5 +307,77 @@ public class BusStation : MonoBehaviour
         Bus bus = GetBusByColor(color);
 
         return bus == null ? 0 : bus.GetAvailableSeat();
+    }
+
+
+    public void OnPassengerBoardedColor(PassengerColor color)
+    {
+        if (color == null) return;
+
+        int remaining = PassengerManager.Instance.GetCountByColor(color);
+
+        int committed = 0;
+
+        foreach (var bus in parkingBusList)
+        {
+            if (bus != null && !bus.isWildcard && bus.passengerColor == color)
+                committed += bus.GetAvailableSeat();
+        }
+
+        foreach (var lane in busLanes)
+        {
+            foreach (var bus in lane.garageBuses)
+            {
+                if (bus != null && bus.passengerColor == color)
+                    committed += bus.GetAvailableSeat();
+            }
+        }
+
+        int excess = committed - remaining;
+        if (excess <= 0) return;
+
+        // Cắt từ CUỐI hàng garage trước - bus này chưa ai đang hướng tới, hủy an toàn nhất.
+        // QUAN TRỌNG: chỉ hủy NGUYÊN bus khi toàn bộ ghế trống của nó đều là dư thừa
+        // (seat <= excess). Nếu seat > excess, nghĩa là bus này vẫn cần thiết để chở
+        // phần passenger còn lại -> chỉ GIẢM capacity đúng bằng phần dư, không phá cả bus.
+        foreach (var lane in busLanes)
+        {
+            for (int i = lane.garageBuses.Count - 1; i >= 1 && excess > 0; i--)
+            {
+                Bus bus = lane.garageBuses[i];
+                if (bus == null || bus.passengerColor != color) continue;
+
+                int seat = bus.GetAvailableSeat();
+
+                if (seat <= excess)
+                {
+                    // Toàn bộ bus này là dư thừa -> xóa hẳn
+                    lane.garageBuses.RemoveAt(i);
+                    Destroy(bus.gameObject);
+                    excess -= seat;
+                }
+                else
+                {
+                    // Chỉ một phần capacity là dư thừa -> giảm capacity, GIỮ LẠI bus
+                    // vì nó vẫn cần chở (seat - excess) passenger còn lại của màu này
+                    bus.SetCapacity(seat - excess);
+                    excess = 0;
+                }
+            }
+
+            lane.RefreshGaragePositions();
+        }
+
+        // Nếu vẫn còn dư VÀ remaining đã thật sự về 0 -> ép bus đang đậu (nếu có) rời sớm
+        if (excess > 0 && remaining == 0)
+        {
+            foreach (var bus in parkingBusList.ToList())
+            {
+                if (bus != null && !bus.isWildcard && bus.passengerColor == color && bus.GetAvailableSeat() > 0)
+                {
+                    bus.ForceToLeaveEarly();
+                }
+            }
+        }
     }
 }

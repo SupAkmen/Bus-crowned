@@ -14,8 +14,15 @@ public class BusTrigger : MonoBehaviour
 
         if (passenger == null) return;
 
-        if (passenger.PassengerColor != bus.passengerColor)
-            return;
+        if (bus.isWildcard)
+        {
+            if (!BusStation.instance.CanWildcardAccept(passenger.PassengerColor)) return;
+        }
+        else
+        {
+            if (passenger.PassengerColor != bus.passengerColor)
+                return;
+        }
 
         passenger.EnterBus(bus);
     }

@@ -10,6 +10,13 @@ public class Passenger : MonoBehaviour
     PassengerColor passengerColor;
     [SerializeField] MeshRenderer bodyRenderer;
     public PassengerColor PassengerColor => passengerColor;
+
+    /// <summary>
+    /// True neu passenger dang DUNG YEN (khong di chuyen, khong dang len xe). Dung boi
+    /// HintBooster de tranh chon nham mot passenger dang tren duong lam "seed".
+    /// </summary>
+    public bool IsAvailableForHint => !isMoving && !isEntering && CurrentNode != null;
+
     public GridNode CurrentNode;
 
     List<GridNode> path;
@@ -29,6 +36,11 @@ public class Passenger : MonoBehaviour
     [SerializeField] float rotationSpeed = 720f;
     Quaternion idleRotation;
 
+    [Header("Highlight")]
+    [Tooltip("GameObject hieu ung glow/outline, la con cua Passenger prefab, mac dinh tatBat len khi mot Booster dang cho nguoi choi chon passenger nay.")]
+    [SerializeField] GameObject highlightIndicator;
+
+    Coroutine hintBlinkCoroutine;
     public Bus targetBus; // Bus cu the ma passenger dang huong toi 
 
     private void Start()
@@ -87,7 +99,7 @@ public class Passenger : MonoBehaviour
         Vector3 faceDir = agent.velocity;
         faceDir.y = 0f;
 
-        if(faceDir.sqrMagnitude > 0.01f)
+        if (faceDir.sqrMagnitude > 0.01f)
         {
             Quaternion targetPosition = Quaternion.LookRotation(faceDir);
             transform.rotation = Quaternion.RotateTowards(transform.rotation, targetPosition, rotationSpeed * Time.deltaTime);
@@ -105,6 +117,43 @@ public class Passenger : MonoBehaviour
 
             pathIndex++;
         }
+    }
+
+    public void SetHighLight(bool on, float duration = 3f)
+    {
+        if (hintBlinkCoroutine != null)
+        {
+            StopCoroutine(hintBlinkCoroutine);
+            hintBlinkCoroutine = null;
+        }
+
+        if (on)
+        {
+            hintBlinkCoroutine = StartCoroutine(HintBlinkRoutine(duration));
+        }
+        else if (highlightIndicator != null)
+        {
+            highlightIndicator.SetActive(false);
+        }
+    }
+
+    IEnumerator HintBlinkRoutine(float duration)
+    {
+        if (highlightIndicator == null) yield break;
+
+        float t = 0f;
+
+        while (t < duration)
+        {
+            t += Time.deltaTime;
+
+            highlightIndicator.SetActive(Mathf.PingPong(t * 4f, 1f) > 0.5f); // nhap nhay
+
+            yield return null;
+        }
+
+        highlightIndicator.SetActive(false);
+        //highlightIndicator = null;
     }
 
     static readonly Dictionary<Bus, int> movingCountByBus = new();
@@ -148,13 +197,13 @@ public class Passenger : MonoBehaviour
     GridNode FindMatchingBusTargetNode()
     {
         // Neu da co bú dang bam va bú do van con cho -> giu nguyen, tranh doi bú giua duong
-        if(targetBus != null && targetBus.GetAvailableSeat() >0)
+        if (targetBus != null && targetBus.GetAvailableSeat() > 0)
         {
             return targetBus.targetNode;
         }
 
-        Bus bus = BusStation.instance.GetNearestBusByColor(passengerColor,transform.position);
-        targetBus = bus;    
+        Bus bus = BusStation.instance.GetNearestBusByColor(passengerColor, transform.position);
+        targetBus = bus;
         return bus != null ? bus.targetNode : null;
     }
 
@@ -282,16 +331,16 @@ public class Passenger : MonoBehaviour
 
         var layerGroups = group.GroupBy(p => layerOf[p]).OrderBy(g => g.Key);
 
-        foreach(var layerGroup in layerGroups)
+        foreach (var layerGroup in layerGroups)
         {
             // Trong  1 layer uu tien gan bus hon
             var sorted = layerGroup.OrderBy(p => p.GetDistanceToTarget());
 
-            foreach(Passenger p in sorted)
+            foreach (Passenger p in sorted)
             {
                 p.MoveInternal();
 
-                if(p.isMoving && !p.isDispatchedToBus)
+                if (p.isMoving && !p.isDispatchedToBus)
                 {
                     p.isDispatchedToBus = true;
                     IncrementMoving(p.targetBus);
@@ -305,9 +354,9 @@ public class Passenger : MonoBehaviour
 
         // Danh dau lai walkable = false cho ai chua tim dc duong
 
-        foreach(Passenger p in group)
+        foreach (Passenger p in group)
         {
-            if(p.CurrentNode  != null && !p.isMoving)
+            if (p.CurrentNode != null && !p.isMoving)
             {
                 p.CurrentNode.walkable = false;
                 p.CurrentNode.occupant = p;
@@ -362,6 +411,8 @@ public class Passenger : MonoBehaviour
 
         StartCoroutine(JumpIntoBus(bus));
         bus.UpdateCapcity();
+
+        BusStation.instance.OnPassengerBoardedColor(PassengerColor);
     }
 
     IEnumerator JumpIntoBus(Bus bus)
@@ -391,6 +442,57 @@ public class Passenger : MonoBehaviour
 
         Destroy(gameObject);
 
+    }
+
+    /// <summary>
+    /// Dung boi Booster "Hut Passenger": passenger bay thang len tren (vao "lo hong" hieu ung phia
+    /// tren dau) roi bien mat, thay vi bay theo duong toi vi tri bus nhu JumpIntoBus() thong thuong.
+    /// Bo qua hoan toan pathfinding - day la cong cu "chua chay" khi passenger bi ket khong co duong ra.
+    /// </summary>
+    public IEnumerator SuctionIntoBus(Bus bus, float riseHeight, float duration)
+    {
+        if (isEntering) yield break;
+
+        isEntering = true;
+        isMoving = false;
+
+        if (isDispatchedToBus)
+        {
+            isDispatchedToBus = false;
+            DecrementMoving(targetBus);
+        }
+
+        if (CurrentNode != null)
+        {
+            CurrentNode.walkable = true;
+            CurrentNode.occupant = null;
+            CurrentNode = null;
+        }
+
+        PassengerManager.Instance.Unregister(this);
+        agent.UnRegister();
+
+        Vector3 start = transform.position;
+        Vector3 end = start + Vector3.up * riseHeight;
+        Vector3 startScale = transform.localScale;
+
+        float t = 0f;
+        while (t < duration)
+        {
+            t += Time.deltaTime;
+            float p = Mathf.Clamp01(t / duration);
+
+            transform.position = Vector3.Lerp(start, end, p);
+            transform.localScale = Vector3.Lerp(startScale, Vector3.zero, p); // teo nho dan khi bay len
+
+            yield return null;
+        }
+
+        bus.UpdateCapcity();
+
+        BusStation.instance.OnPassengerBoardedColor(PassengerColor);
+
+        Destroy(gameObject);
     }
 
     /// <summary>

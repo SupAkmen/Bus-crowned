@@ -1,26 +1,328 @@
 ﻿========================================
 UNITY SCRIPT EXPORT
 ========================================
-Tổng số file quét được: 20
+Tổng số file quét được: 24
 
 ########################################
-FILE: Assets/Scripts/PassengerColorPallete.cs
+FILE: Assets/Scripts/Booster/ExpressBusBooster.cs
 ########################################
 
+using NUnit.Framework;
+using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.XR;
+/// <summary>
+/// Chon1 trong 3 bus dang dau -> Bus do roi som(di theo leavPos co san cua BusLane) -> bus garage ke tiep len thay ngay lap tuc
+/// </summary>
+public class ExpressBusBooster : MonoBehaviour
+{
+    [SerializeField] float expressSpeed = 8f;
+
+    Camera cam;
+    bool isSelecting = false;
+
+    void Awake() => cam = Camera.main;
+
+    private void Update()
+    {
+        if (!isSelecting) return;
+
+        if(Input.GetMouseButtonDown(1) || Input.GetKeyDown(KeyCode.Space))
+        {
+            EndSelection();
+            return;
+        }
+
+        if(Input.GetMouseButtonDown(0))
+        {
+            Ray ray = cam.ScreenPointToRay(Input.mousePosition);
+
+            if (Physics.Raycast(ray, out RaycastHit hit))
+            {
+                Bus bus = hit.collider.GetComponentInParent<Bus>();
+
+                if (bus != null && BusStation.instance.parkingBusList.Contains(bus))
+                {
+                    EndSelection();
+                    SendBusExpress(bus);
+                }
+            }
+        }
+    }
+
+    public void ActivateBooster()
+    {
+        if (isSelecting) return;
+
+        isSelecting = true;
+        SetHighLight(true);
+        Debug.Log("ExpressBus Booster");
+    }
+
+    void EndSelection()
+    {
+        isSelecting = false;
+        SetHighLight(false);  
+    }
+
+    void SetHighLight(bool on)
+    {
+         foreach(var bus in BusStation.instance.parkingBusList)
+        {
+            if (bus != null)
+            {
+                bus.SetHighLight(on);
+            }
+        }
+    }
+
+    void SendBusExpress(Bus bus)
+    {
+        BusLane lane = bus.ParentLane;
+
+        if(lane == null) return;
+
+        BusStation.instance.UnRegisterParkingBus(bus);
+        lane.SetParkingBus(null);
+
+        StartCoroutine(bus.ExpressLeaveAndRejoinGaragfe(lane.expressOutPath,lane,expressSpeed));
+
+        lane.PullNextGarageBusImmediate();
+    }
+}
+
+
+
+########################################
+FILE: Assets/Scripts/Booster/HintBooster.cs
+########################################
+
+using UnityEngine;
+
+public class HintBooster : MonoBehaviour
+{
+    [SerializeField] float highlightDuration = 3f;
+    
+    public void ActiveBooster()
+    {
+        var group = PassengerManager.Instance.FindBestHintGroup();
+
+        if(group == null || group.Count == 0)
+        {
+            return;
+        }
+
+        foreach(var p in group)
+        {
+            p.SetHighLight(true, highlightDuration);
+        }
+
+        Debug.Log("Hint booster");
+    }
+}
+
+
+
+########################################
+FILE: Assets/Scripts/Booster/PassengerSuctionBooster.cs
+########################################
+
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// Noi luu tru danh sach tat ca PassengerColor dung chung cho ca game.
-/// Thay vi phai keo-tha tung mau vao rieng le o moi component (PassengerSpawnAreas,
-/// PixelImageConverter...), gio chi can tao 1 asset Palette nay va tham chieu no
-/// o moi noi. Them/bot mau chi can sua 1 cho duy nhat.
+/// Booster "Hut Passenger": nguoi choi nhan booster -> chon 1 trong cac bus dang dau o parking
+/// -> he thong tu dong hut mot so luong passenger cung mau (uu tien nguoi dang bi chan/o sau
+/// ben trong nhat) truc tiep len bus do, BO QUA hoan toan pathfinding. Day la cong cu "chua chay"
+/// manh nhat trong 4 booster, dung khi nguoi choi thuc su bi ket khong tim duoc duong di.
 /// </summary>
-[CreateAssetMenu(fileName = "PassengerColorPalette", menuName = "Scriptable Objects/PassengerColorPalette")]
-public class PassengerColorPalette : ScriptableObject
+public class PassengerSuctionBooster : MonoBehaviour
 {
-    public List<PassengerColor> colors = new();
+    public static PassengerSuctionBooster Instance;
+
+    [Header("Suction Settings")]
+    [Tooltip("So luong passenger toi da se duoc hut trong 1 lan dung booster. " +
+             "Thuc te se bi gioi han them boi so ghe trong con lai cua bus va so passenger cung mau hien co.")]
+    [SerializeField] int suctionCount = 5;
+
+    [SerializeField] float suctionRiseHeight = 2f;
+    [SerializeField] float suctionRiseDuration = 0.3f;
+    [SerializeField] float staggerDelay = 0.15f; // khoang cach giua moi lan hut, tranh dong loat qua roi mat
+
+    [Header("Effects (Optional)")]
+    [Tooltip("Hieu ung 'lo hong' hut, se duoc spawn phia tren dau passenger va phia tren bus. Co the de trong.")]
+    [SerializeField] GameObject suctionHoleEffectPrefab;
+    [SerializeField] float effectLifetime = 0.6f;
+
+    bool isSelecting = false;
+    Camera cam;
+
+    void Awake()
+    {
+        Instance = this;
+        cam = Camera.main;
+    }
+
+    void Update()
+    {
+        if (!isSelecting) return;
+
+        // Cho phep huy che do chon bang phim Escape hoac chuot phai
+        if (Input.GetMouseButtonDown(1) || Input.GetKeyDown(KeyCode.Escape))
+        {
+            CancelSelection();
+            return;
+        }
+
+        if (Input.GetMouseButtonDown(0))
+        {
+            Ray ray = cam.ScreenPointToRay(Input.mousePosition);
+
+            if (Physics.Raycast(ray, out RaycastHit hit))
+            {
+                Bus bus = hit.collider.GetComponentInParent<Bus>();
+
+                if (bus != null && BusStation.instance.parkingBusList.Contains(bus))
+                {
+                    EndSelection();
+                    StartCoroutine(SuctionRoutine(bus));
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Goi tu OnClick cua nut Booster tren UI. Bat che do cho nguoi choi chon 1 bus dang dau.
+    /// </summary>
+    public void ActivateBooster()
+    {
+        if (isSelecting) return;
+
+        isSelecting = true;
+        SetParkingBusesHighlight(true);
+    }
+
+    void CancelSelection()
+    {
+        EndSelection();
+    }
+
+    void EndSelection()
+    {
+        isSelecting = false;
+        SetParkingBusesHighlight(false);
+    }
+
+    void SetParkingBusesHighlight(bool on)
+    {
+        foreach (var bus in BusStation.instance.parkingBusList)
+        {
+            if (bus != null) bus.SetHighLight(on);
+        }
+    }
+
+    IEnumerator SuctionRoutine(Bus bus)
+    {
+        int availableSeats = bus.GetAvailableSeat();
+        if (availableSeats <= 0) yield break;
+
+        int targetCount = Mathf.Min(suctionCount, availableSeats);
+
+        List<Passenger> priorityList = PassengerManager.Instance
+            .GetPassengersOrderedBySuctionPriority(bus.passengerColor, bus.targetNode);
+
+        int actualCount = Mathf.Min(targetCount, priorityList.Count);
+
+        for (int i = 0; i < actualCount; i++)
+        {
+            Passenger p = priorityList[i];
+            if (p == null) continue;
+
+            yield return StartCoroutine(SuctionSinglePassenger(p, bus));
+
+            if (i < actualCount - 1)
+                yield return new WaitForSeconds(staggerDelay);
+        }
+    }
+
+    IEnumerator SuctionSinglePassenger(Passenger p, Bus bus)
+    {
+        // Hieu ung "lo hong" phia tren dau passenger truoc khi hut
+        GameObject holeAbovePassenger = SpawnEffect(p.transform.position + Vector3.up * 1.2f);
+
+        yield return StartCoroutine(p.SuctionIntoBus(bus, suctionRiseHeight, suctionRiseDuration));
+
+        if (holeAbovePassenger != null) Destroy(holeAbovePassenger, effectLifetime);
+
+        // Hieu ung "lo hong" tha xuong phia tren bus, bao hieu passenger da len xe
+        GameObject holeAboveBus = SpawnEffect(bus.transform.position + Vector3.up * 2f);
+        if (holeAboveBus != null) Destroy(holeAboveBus, effectLifetime);
+    }
+
+    GameObject SpawnEffect(Vector3 position)
+    {
+        if (suctionHoleEffectPrefab == null) return null;
+        return Instantiate(suctionHoleEffectPrefab, position, Quaternion.identity);
+    }
 }
+
+
+########################################
+FILE: Assets/Scripts/Booster/WildcardBusBooster.cs
+########################################
+
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+
+/// <summary>
+/// Spawn 1 bus da nang tai spawnPoint (vi tri mau vang khoanh tron trong anh), di chuyen
+/// toi wildcardParkingPoint (vi tri parking rieng, ben canh 3 lane thuong). Bus nay nhan
+/// duoc moi mau KHONG trung voi 3 bus binh thuong dang dau, capacity thap hon binh thuong.
+/// </summary>
+public class WildcardBusBooster : MonoBehaviour
+{
+    [Header("Wildcard Bus Setup")]
+    [SerializeField] Bus wildcardBusPrefab;
+    [SerializeField] Transform spawnPoint;
+    [SerializeField] Transform wildcardParkingPoint;
+    [SerializeField] int wildcardCapacity = 15;
+    [SerializeField] float moveSpeed = 5f;
+
+    [Header("Wildcard Leave Path")]
+    [Tooltip("Duong di khi Wildcard Bus day khach va roi ban co, vi no khong thuoc BusLane nao.")]
+    [SerializeField] List<Transform> wildcardLeaveOutPath;
+
+    public void ActivateBooster()
+    {
+        if (BusStation.instance.wildcardBus != null)
+        {
+            Debug.Log("[WildcardBusBooster] Da co mot Wildcard Bus dang hoat dong.");
+            return;
+        }
+
+        StartCoroutine(SpawnAndMoveRoutine());
+
+        Debug.Log("WildcardBus Booster");
+    }
+
+    IEnumerator SpawnAndMoveRoutine()
+    {
+        Bus bus = Instantiate(wildcardBusPrefab, spawnPoint.position, Quaternion.Euler(0, 180, 0));
+
+        bus.SetAsWildcard(wildcardCapacity);
+        bus.SetWildcardLeavepath(wildcardLeaveOutPath);
+        BusStation.instance.RegisterWildcardBus(bus);
+
+        yield return StartCoroutine(bus.MoveToPosition(wildcardParkingPoint.position, moveSpeed));
+
+        bus.transform.SetLocalPositionAndRotation(wildcardParkingPoint.position, wildcardParkingPoint.rotation);
+
+        bus.targetNode = PassengerGrid.Instance.GetNearestNode(wildcardParkingPoint.position);
+    }
+}
+
 
 
 ########################################
@@ -29,8 +331,12 @@ FILE: Assets/Scripts/Bus/Bus.cs
 
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using TMPro;
+using Unity.VisualScripting;
 using UnityEngine;
+using UnityEngine.UIElements;
+using UnityEngine.XR;
 
 public class Bus : MonoBehaviour
 {
@@ -39,7 +345,17 @@ public class Bus : MonoBehaviour
     [SerializeField] TextMeshPro capacityText;
     [SerializeField] float busSpeed = 5f;
     [SerializeField] MeshRenderer bodyRenderer;
+
     [HideInInspector] public PassengerColor passengerColor;
+    [HideInInspector] public bool isWildcard = false;
+
+    [HideInInspector] public List<Transform> wildcardLeavePath;
+
+    [Header("Highlight")]
+    [Tooltip("GameObject hieu ung glow/outline, la con cua Bus prefab, mac dinh tat. " +
+         "Bat len khi mot Booster dang cho nguoi choi chon bus nay.")]
+    [SerializeField] GameObject highlightIndicator;
+
     public GridNode targetNode;
     int capacityInBus;
     bool capacityInitialized = false; // so luong khach thuc te co the chua
@@ -49,36 +365,52 @@ public class Bus : MonoBehaviour
     // Reference to parentLane ( assign by BusLane or GetCompoonentInParent)
     BusLane parentLane;
 
+    public BusLane ParentLane => parentLane;
+
     private void Start()
     {
-        if(!capacityInitialized)
+        if (!capacityInitialized)
         {
             capacityInBus = capacityPerBus;
-        }   
+        }
         UpdateCapacityText();
 
-        parentLane =  GetComponentInParent<BusLane>();
+        parentLane = GetComponentInParent<BusLane>();
     }
     public void SetCapacity(int amount)
     {
-        capacityInBus = Mathf.Clamp(amount,0,capacityPerBus);
+        capacityInBus = Mathf.Clamp(amount, 0, capacityPerBus);
         capacityInitialized = true;
-        UpdateCapacityText ();
+        UpdateCapacityText();
     }
+
+
+    public void SetHighLight(bool isOn)
+    {
+        if (highlightIndicator != null)
+        {
+            highlightIndicator.SetActive(isOn);
+        }
+    }
+
+    public void SetWildcardLeavepath(List<Transform> path)
+    {
+        wildcardLeavePath = path;
+    }
+
 
     private void OnDisable()
     {
         if (BusStation.instance != null)
         {
             BusStation.instance.UnRegisterParkingBus(this);
+            BusStation.instance.UnRegisterWildcardBus(this);
         }
     }
 
     private void Update()
     {
-
         MoveToGoal();
-
     }
 
     /// <summary>
@@ -100,7 +432,7 @@ public class Bus : MonoBehaviour
     {
         passengerColor = color;
 
-        if(bodyRenderer != null && color != null && color.material != null)
+        if (bodyRenderer != null && color != null && color.material != null)
         {
             bodyRenderer.material = color.material;
         }
@@ -121,27 +453,90 @@ public class Bus : MonoBehaviour
         if (capacityInBus <= 0)
         {
             capacityText.text = " ";
+            TriggerFull();
+        }
+    }
 
-            // Notified parent lane
-            if (!hasNotifiedFull && parentLane != null)
-            {
-                hasNotifiedFull = true;
-                parentLane.OnParkingBusFull();
-            }
+    /// <summary>
+    /// Kich hoat khi bus da day khach, thong bao cho parent lane va bat dau di theo duong ra.
+    /// Dung chung boi MoveToGoal() va ForceLeaveToGoal() (Booster Express Bus)
+    /// </summary>
 
-            if (!isLeaving)
+    void TriggerFull()
+    {
+        if(isWildcard)
+        {
+            if(!isLeaving)
             {
                 isLeaving = true;
-                StartCoroutine(FollowLeavePath());
+                StartCoroutine(WildcardLeaveRoutine());
+            }
+            return;
+        }
+
+        // Notified parent lane
+        if (!hasNotifiedFull && parentLane != null)
+        {
+            hasNotifiedFull = true;
+            parentLane.OnParkingBusFull();
+        }
+
+        if (!isLeaving)
+        {
+            isLeaving = true;
+            StartCoroutine(FollowLeavePath());
+        }
+    }
+
+    IEnumerator WildcardLeaveRoutine()
+    {
+        yield return new WaitForSeconds(0.3f);
+
+        BusStation.instance.UnRegisterParkingBus(this);
+        BusStation.instance.UnRegisterWildcardBus(this); // giai phong vi tri cho phep wildcard moi vao
+
+        if(wildcardLeavePath != null)
+        {
+            foreach(Transform point in wildcardLeavePath)
+            {
+                yield return StartCoroutine(MoveToPosition(point.position, busSpeed));
             }
         }
+
+        Destroy(gameObject);
+    }
+
+
+    /// <summary>
+    /// Dung cho booster express bus : ep bus roi khoi parking ngay lap tuc du chua day khach, tai su dung chuoi FollowLeavePath + OnParkingBusFull() co san
+    /// </summary>
+    public void  ForceToLeaveEarly()
+    {
+        if (isLeaving) return;
+
+        capacityInBus = 0;
+        capacityText.text = " ";
+        TriggerFull();
+    }
+
+    /// <summary>
+    /// danh dau bus nay la wildcard : ko co mau co dinh, capacity co the thay doi,
+    /// </summary>
+    /// <returns></returns>
+
+    public void SetAsWildcard(int capacity)
+    {
+        isWildcard = true;
+        passengerColor = null;
+        capacityPerBus = capacity;
+        SetCapacity(capacity);
     }
 
     IEnumerator FollowLeavePath()
     {
         yield return new WaitForSeconds(0.3f);
 
-        if (parentLane == null) 
+        if (parentLane == null)
             yield break;
 
         parentLane.SetParkingBusy(true);
@@ -149,29 +544,29 @@ public class Bus : MonoBehaviour
         int index = 0;
         bool parkingUnlocked = false;
 
-        foreach(Transform point in parentLane.leavePos)
+        foreach (Transform point in parentLane.leavePos)
         {
-            while(Vector3.Distance(transform.position, point.position) > 0.05f)
+            while (Vector3.Distance(transform.position, point.position) > 0.05f)
             {
                 Vector3 direction = point.position - transform.position;
                 direction.y = 0f;
 
                 // quay dau xe
 
-                if(direction.sqrMagnitude > 0.0001f)
+                if (direction.sqrMagnitude > 0.0001f)
                 {
                     Quaternion targetRotation = Quaternion.LookRotation(direction);
 
-                    transform.rotation = Quaternion.RotateTowards(transform.rotation,targetRotation,100f * Time.deltaTime);
+                    transform.rotation = Quaternion.RotateTowards(transform.rotation, targetRotation, 100f * Time.deltaTime);
                 }
 
-                transform.position = Vector3.MoveTowards(transform.position,point.position,busSpeed * Time.deltaTime);
+                transform.position = Vector3.MoveTowards(transform.position, point.position, busSpeed * Time.deltaTime);
 
-                if(!parkingUnlocked)
+                if (!parkingUnlocked)
                 {
                     float distance = Vector3.Distance(transform.position, parentLane.parkingPosition.position);
 
-                    if(distance >= parentLane.UnlockParkingDistance)
+                    if (distance >= parentLane.UnlockParkingDistance)
                     {
                         parkingUnlocked = true;
                         parentLane.SetParkingBusy(false);
@@ -182,13 +577,57 @@ public class Bus : MonoBehaviour
             }
         }
 
-        if(index == 0)
+        if (index == 0)
         {
             parentLane.SetParkingBusy(false);
         }
 
         index++;
 
+    }
+
+    public IEnumerator ExpressLeaveAndRejoinGaragfe(List<Transform> outPath,BusLane targetLane,float speed)
+    {
+        isLeaving = true;
+
+        foreach(Transform point in outPath)
+        {
+            yield return StartCoroutine(MoveToPosition(point.position, speed));
+        }
+
+        isLeaving = false;
+
+        // sau khi ra ngoai, xep vao cuoi hang garage dc chi dinh
+        targetLane.EnqueueToGarageEnd(this);
+    }
+
+    /// <summary>
+    /// Di chuyen thang toi 1 vi tri, dung boi WildcardBusBooster de dua bus tu diem spawn
+    /// toi vi tri parking rieng (khac voi FollowLeavePath von dung cho luc bus ROI di).
+    /// </summary>
+    /// <param name="targetPos"></param>
+    /// <param name="speed"></param>
+    /// <returns></returns>
+    public IEnumerator MoveToPosition(Vector3 targetPos, float speed)
+    {
+        while (Vector3.Distance(transform.position, targetPos) > 0.05f)
+        {
+            Vector3 direction = targetPos - transform.position;
+
+            direction.y = 0f;
+
+            if (direction.sqrMagnitude > 0.0001f)
+            {
+                Quaternion targetRotation = Quaternion.LookRotation(direction);
+
+                transform.rotation = Quaternion.RotateTowards(transform.rotation, targetRotation, 100f * Time.deltaTime);
+            }
+
+            transform.position = Vector3.MoveTowards(transform.position, targetPos, speed * Time.deltaTime);
+            yield return null;
+        }
+
+        transform.position = targetPos;
     }
 }
 
@@ -210,7 +649,7 @@ public class BusLane : MonoBehaviour
     [Header("Position")]
     public Transform parkingPosition;
     public List<Transform> leavePos;
-    public List<Transform> garagePositions; 
+    public List<Transform> garagePositions;
 
     [Header("Buses")]
     public Bus parkingBus;
@@ -224,8 +663,14 @@ public class BusLane : MonoBehaviour
     public bool ParkingBusy { get; private set; }
     public void SetParkingBusy(bool busy) => ParkingBusy = busy;
     public float UnlockParkingDistance => unlockParkingDistance;
-
     public void SetParkingBus(Bus bus) => parkingBus = bus;
+
+    [Header("Express Bus Path")]
+    [Tooltip("Duong di rieng cua LANE NAY khi bus bi Booster Express rung ra ngoai. " +
+         "Moi lane co vi tri vat ly khac nhau nen can duong di khac nhau, mo phong " +
+         "duong mau do rieng cho lane do. Diem cuoi la noi bus 'khuat tam nhin' " +
+         "truoc khi duoc dua thang vao garage.")]
+    public List<Transform> expressOutPath;
 
     /// <summary>
     /// Return the current bus in the parking
@@ -245,7 +690,7 @@ public class BusLane : MonoBehaviour
         if (parkingBus == null) return 0;
 
         return parkingBus.GetAvailableSeat();
-    }    
+    }
 
     /// <summary>
     /// Call when the parking bus is full
@@ -267,17 +712,27 @@ public class BusLane : MonoBehaviour
         parkingBus = null;
 
         // Parking bus move to the goal 
-
-
         // Garage bus -> parking bus 
-        while(ParkingBusy)
+
+        yield return StartCoroutine(PullNextGarageBusRoutine());
+    }
+
+    public void PullNextGarageBusImmediate()
+    {
+        StartCoroutine(PullNextGarageBusRoutine());
+    }
+
+
+    IEnumerator PullNextGarageBusRoutine()
+    {
+        while (ParkingBusy)
         {
             yield return null;
         }
 
-        if(garageBuses.Count > 0)
+        if (garageBuses.Count > 0)
         {
-            Bus nextBus  = garageBuses[0];
+            Bus nextBus = garageBuses[0];
             garageBuses.RemoveAt(0);
 
             yield return StartCoroutine(MoveBusToPosition(nextBus, parkingPosition.position));
@@ -290,11 +745,47 @@ public class BusLane : MonoBehaviour
 
 
             // 3. Other garage bus push one position
-            for (int i  = 0; i < garageBuses.Count && i < garagePositions.Count; i++)
+            RefreshGaragePositions();
+        }
+    }
+
+    /// <summary>
+    /// Them mot bus vao CUOI hang cua garage cua lane nay( dung boi Express Bus Booster khi bus quay lai hang cho khac voiw luc spawn ban dau.
+    /// </summary>
+    /// <param name="bus"></param>
+    public void EnqueueToGarageEnd(Bus bus)
+    {
+        garageBuses.Add(bus);
+        RefreshGaragePositions();
+    }
+    /// <summary>
+    /// Di chuyen lai toan bo bus trong garage ve dung vi tri slot theo thu tu hien tai dung sau khi garage thaty doi ( bus toi di hoa bus moi duoc them vao cuoi hang)
+    /// </summary>
+    public void RefreshGaragePositions()
+    {
+        for (int i = 0; i < garageBuses.Count && i < garagePositions.Count; i++)
+        {
+            StartCoroutine(MoveBusToPosition(garageBuses[i], garagePositions[i].position));
+        }
+    }
+
+    /// <summary>
+    /// Xoa hoan toan cac bus trong garage chua tung duoc dua vao parking va co mau da het passenger( xem Bus.FlushIfColorExhausted). Vi cac bus nay chua nhan duoc khach nao, huy an toan khong ma
+    /// </summary>
+    /// <param name="color"></param>
+    public void RemoveGarageBusesOfColor(PassengerColor color)
+    {
+        for(int i = garageBuses.Count - 1;i >= 0; i--)
+        {
+            if (garageBuses[i] != null && garageBuses[i].passengerColor == color)
             {
-                StartCoroutine(MoveBusToPosition(garageBuses[i], garagePositions[i].position));
+                Bus bus = garageBuses[i];
+                garageBuses.RemoveAt(i);
+                Destroy(bus.gameObject);
             }
         }
+
+        RefreshGaragePositions();
     }
 
     IEnumerator MoveBusToPosition(Bus bus, Vector3 targetPos)
@@ -304,10 +795,10 @@ public class BusLane : MonoBehaviour
         float duration = distance / moveSpeed;
         float elapsed = 0f;
 
-        while(elapsed < duration)
+        while (elapsed < duration)
         {
             elapsed += Time.deltaTime;
-            float t = Mathf.Clamp01(elapsed/duration);
+            float t = Mathf.Clamp01(elapsed / duration);
             bus.transform.position = Vector3.Lerp(startPos, targetPos, t);
             yield return null;
         }
@@ -328,6 +819,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
+using UnityEngine.UIElements.Experimental;
 
 public class BusStation : MonoBehaviour
 {
@@ -341,6 +833,8 @@ public class BusStation : MonoBehaviour
     // The list of car in parking 
     [HideInInspector] public List<Bus> parkingBusList = new List<Bus>();
 
+    [HideInInspector] public Bus wildcardBus;
+
     private void Awake()
     {
         instance = this;
@@ -348,6 +842,40 @@ public class BusStation : MonoBehaviour
     private void Start()
     {
         StartCoroutine(InitializeBusesRoutine());
+    }
+
+    public void RegisterWildcardBus(Bus bus)
+    {
+        wildcardBus = bus;
+    }
+
+    public void UnRegisterWildcardBus(Bus bus)
+    {
+        if (wildcardBus == bus)
+        {
+            wildcardBus = null;
+        }
+    }
+    public bool CanWildcardAccept(PassengerColor color)
+    {
+        if(wildcardBus == null || wildcardBus.GetAvailableSeat() <= 0)
+        {
+            return false;
+        }
+
+        foreach(var normalBus in parkingBusList)
+        {
+            if(normalBus == wildcardBus) continue;
+
+            if (normalBus.passengerColor == color) return false;
+        }
+
+        return true;
+    }
+
+    public Bus GetWildcardBusIfAcceptable(PassengerColor color)
+    {
+        return CanWildcardAccept(color) ? wildcardBus : null;
     }
 
     IEnumerator InitializeBusesRoutine()
@@ -595,6 +1123,72 @@ public class BusStation : MonoBehaviour
 
         return bus == null ? 0 : bus.GetAvailableSeat();
     }
+
+
+    /// <summary>
+    /// Goi moi khi 1 passenger vua len BAT KY bus nao (thuong, wildcard, suction...).
+    /// Thay vi chi kiem tra "da het hoan toan" (== 0), ham nay so sanh TRUC TIEP tong so
+    /// ghe da cam ket (committed) tren cac bus THUONG cua mau nay (dang dau + trong garage)
+    /// voi so nguoi THUC SU con lai. Neu committed > remaining (vi du do Wildcard da "an
+    /// bot" mot phan khach), phan du thua se bi cat bo NGAY, bat dau tu cuoi hang garage
+    /// (an toan nhat vi chua ai dang huong toi). Cach nay chinh xac va manh hon nhieu so
+    /// voi cach cu chi phan ung dung luc == 0, tranh sai so tich luy hoac bo sot truong hop.
+    /// </summary>
+    public void OnPassengerBoardedColor(PassengerColor color)
+    {
+        if (color == null) return; // wildcard bus khong co mau co dinh, bo qua
+
+        int remaining = PassengerManager.Instance.GetCountByColor(color);
+
+        int committed = 0;
+
+        foreach (var bus in parkingBusList)
+        {
+            if (bus != null && !bus.isWildcard && bus.passengerColor == color)
+                committed += bus.GetAvailableSeat();
+        }
+
+        foreach (var lane in busLanes)
+        {
+            foreach (var bus in lane.garageBuses)
+            {
+                if (bus != null && bus.passengerColor == color)
+                    committed += bus.GetAvailableSeat();
+            }
+        }
+
+        int excess = committed - remaining;
+        if (excess <= 0) return;
+
+        // Cat tu CUOI hang garage truoc - bus nay chua ai dang huong toi, huy an toan nhat
+        foreach (var lane in busLanes)
+        {
+            for (int i = lane.garageBuses.Count - 1; i >= 0 && excess > 0; i--)
+            {
+                Bus bus = lane.garageBuses[i];
+                if (bus == null || bus.passengerColor != color) continue;
+
+                int seat = bus.GetAvailableSeat();
+                lane.garageBuses.RemoveAt(i);
+                Destroy(bus.gameObject);
+                excess -= seat;
+            }
+
+            lane.RefreshGaragePositions();
+        }
+
+        // Neu van con du VA remaining da that su ve 0 -> ep bus dang dau (neu co) roi som
+        if (excess > 0 && remaining == 0)
+        {
+            foreach (var bus in parkingBusList.ToList())
+            {
+                if (bus != null && !bus.isWildcard && bus.passengerColor == color && bus.GetAvailableSeat() > 0)
+                {
+                    bus.ForceToLeaveEarly();
+                }
+            }
+        }
+    }
 }
 
 
@@ -619,8 +1213,15 @@ public class BusTrigger : MonoBehaviour
 
         if (passenger == null) return;
 
-        if (passenger.PassengerColor != bus.passengerColor)
-            return;
+        if (bus.isWildcard)
+        {
+            if (!BusStation.instance.CanWildcardAccept(passenger.PassengerColor)) return;
+        }
+        else
+        {
+            if (passenger.PassengerColor != bus.passengerColor)
+                return;
+        }
 
         passenger.EnterBus(bus);
     }
@@ -885,6 +1486,13 @@ public class Passenger : MonoBehaviour
     PassengerColor passengerColor;
     [SerializeField] MeshRenderer bodyRenderer;
     public PassengerColor PassengerColor => passengerColor;
+
+    /// <summary>
+    /// True neu passenger dang DUNG YEN (khong di chuyen, khong dang len xe). Dung boi
+    /// HintBooster de tranh chon nham mot passenger dang tren duong lam "seed".
+    /// </summary>
+    public bool IsAvailableForHint => !isMoving && !isEntering && CurrentNode != null;
+
     public GridNode CurrentNode;
 
     List<GridNode> path;
@@ -904,6 +1512,11 @@ public class Passenger : MonoBehaviour
     [SerializeField] float rotationSpeed = 720f;
     Quaternion idleRotation;
 
+    [Header("Highlight")]
+    [Tooltip("GameObject hieu ung glow/outline, la con cua Passenger prefab, mac dinh tatBat len khi mot Booster dang cho nguoi choi chon passenger nay.")]
+    [SerializeField] GameObject highlightIndicator;
+
+    Coroutine hintBlinkCoroutine;
     public Bus targetBus; // Bus cu the ma passenger dang huong toi 
 
     private void Start()
@@ -962,7 +1575,7 @@ public class Passenger : MonoBehaviour
         Vector3 faceDir = agent.velocity;
         faceDir.y = 0f;
 
-        if(faceDir.sqrMagnitude > 0.01f)
+        if (faceDir.sqrMagnitude > 0.01f)
         {
             Quaternion targetPosition = Quaternion.LookRotation(faceDir);
             transform.rotation = Quaternion.RotateTowards(transform.rotation, targetPosition, rotationSpeed * Time.deltaTime);
@@ -980,6 +1593,43 @@ public class Passenger : MonoBehaviour
 
             pathIndex++;
         }
+    }
+
+    public void SetHighLight(bool on, float duration = 3f)
+    {
+        if (hintBlinkCoroutine != null)
+        {
+            StopCoroutine(hintBlinkCoroutine);
+            hintBlinkCoroutine = null;
+        }
+
+        if (on)
+        {
+            hintBlinkCoroutine = StartCoroutine(HintBlinkRoutine(duration));
+        }
+        else if (highlightIndicator != null)
+        {
+            highlightIndicator.SetActive(false);
+        }
+    }
+
+    IEnumerator HintBlinkRoutine(float duration)
+    {
+        if (highlightIndicator == null) yield break;
+
+        float t = 0f;
+
+        while (t < duration)
+        {
+            t += Time.deltaTime;
+
+            highlightIndicator.SetActive(Mathf.PingPong(t * 4f, 1f) > 0.5f); // nhap nhay
+
+            yield return null;
+        }
+
+        highlightIndicator.SetActive(false);
+        //highlightIndicator = null;
     }
 
     static readonly Dictionary<Bus, int> movingCountByBus = new();
@@ -1023,13 +1673,13 @@ public class Passenger : MonoBehaviour
     GridNode FindMatchingBusTargetNode()
     {
         // Neu da co bú dang bam va bú do van con cho -> giu nguyen, tranh doi bú giua duong
-        if(targetBus != null && targetBus.GetAvailableSeat() >0)
+        if (targetBus != null && targetBus.GetAvailableSeat() > 0)
         {
             return targetBus.targetNode;
         }
 
-        Bus bus = BusStation.instance.GetNearestBusByColor(passengerColor,transform.position);
-        targetBus = bus;    
+        Bus bus = BusStation.instance.GetNearestBusByColor(passengerColor, transform.position);
+        targetBus = bus;
         return bus != null ? bus.targetNode : null;
     }
 
@@ -1157,16 +1807,16 @@ public class Passenger : MonoBehaviour
 
         var layerGroups = group.GroupBy(p => layerOf[p]).OrderBy(g => g.Key);
 
-        foreach(var layerGroup in layerGroups)
+        foreach (var layerGroup in layerGroups)
         {
             // Trong  1 layer uu tien gan bus hon
             var sorted = layerGroup.OrderBy(p => p.GetDistanceToTarget());
 
-            foreach(Passenger p in sorted)
+            foreach (Passenger p in sorted)
             {
                 p.MoveInternal();
 
-                if(p.isMoving && !p.isDispatchedToBus)
+                if (p.isMoving && !p.isDispatchedToBus)
                 {
                     p.isDispatchedToBus = true;
                     IncrementMoving(p.targetBus);
@@ -1180,9 +1830,9 @@ public class Passenger : MonoBehaviour
 
         // Danh dau lai walkable = false cho ai chua tim dc duong
 
-        foreach(Passenger p in group)
+        foreach (Passenger p in group)
         {
-            if(p.CurrentNode  != null && !p.isMoving)
+            if (p.CurrentNode != null && !p.isMoving)
             {
                 p.CurrentNode.walkable = false;
                 p.CurrentNode.occupant = p;
@@ -1237,6 +1887,8 @@ public class Passenger : MonoBehaviour
 
         StartCoroutine(JumpIntoBus(bus));
         bus.UpdateCapcity();
+
+        BusStation.instance.OnPassengerBoardedColor(PassengerColor);
     }
 
     IEnumerator JumpIntoBus(Bus bus)
@@ -1266,6 +1918,57 @@ public class Passenger : MonoBehaviour
 
         Destroy(gameObject);
 
+    }
+
+    /// <summary>
+    /// Dung boi Booster "Hut Passenger": passenger bay thang len tren (vao "lo hong" hieu ung phia
+    /// tren dau) roi bien mat, thay vi bay theo duong toi vi tri bus nhu JumpIntoBus() thong thuong.
+    /// Bo qua hoan toan pathfinding - day la cong cu "chua chay" khi passenger bi ket khong co duong ra.
+    /// </summary>
+    public IEnumerator SuctionIntoBus(Bus bus, float riseHeight, float duration)
+    {
+        if (isEntering) yield break;
+
+        isEntering = true;
+        isMoving = false;
+
+        if (isDispatchedToBus)
+        {
+            isDispatchedToBus = false;
+            DecrementMoving(targetBus);
+        }
+
+        if (CurrentNode != null)
+        {
+            CurrentNode.walkable = true;
+            CurrentNode.occupant = null;
+            CurrentNode = null;
+        }
+
+        PassengerManager.Instance.Unregister(this);
+        agent.UnRegister();
+
+        Vector3 start = transform.position;
+        Vector3 end = start + Vector3.up * riseHeight;
+        Vector3 startScale = transform.localScale;
+
+        float t = 0f;
+        while (t < duration)
+        {
+            t += Time.deltaTime;
+            float p = Mathf.Clamp01(t / duration);
+
+            transform.position = Vector3.Lerp(start, end, p);
+            transform.localScale = Vector3.Lerp(startScale, Vector3.zero, p); // teo nho dan khi bay len
+
+            yield return null;
+        }
+
+        bus.UpdateCapcity();
+
+        BusStation.instance.OnPassengerBoardedColor(PassengerColor);
+
+        Destroy(gameObject);
     }
 
     /// <summary>
@@ -1390,8 +2093,31 @@ public class PassengerColor : ScriptableObject
     [Header("Image Mapping")]
     public Color pixelColor;
 
+
+
+
 }
 
+
+
+########################################
+FILE: Assets/Scripts/Passenger/PassengerColorPallete.cs
+########################################
+
+using System.Collections.Generic;
+using UnityEngine;
+
+/// <summary>
+/// Noi luu tru danh sach tat ca PassengerColor dung chung cho ca game.
+/// Thay vi phai keo-tha tung mau vao rieng le o moi component (PassengerSpawnAreas,
+/// PixelImageConverter...), gio chi can tao 1 asset Palette nay va tham chieu no
+/// o moi noi. Them/bot mau chi can sua 1 cho duy nhat.
+/// </summary>
+[CreateAssetMenu(fileName = "PassengerColorPalette", menuName = "Scriptable Objects/PassengerColorPalette")]
+public class PassengerColorPalette : ScriptableObject
+{
+    public List<PassengerColor> colors = new();
+}
 
 
 ########################################
@@ -1649,6 +2375,120 @@ public class PassengerManager : MonoBehaviour
 
         return bestNode;
     }
+
+    /// <summary>
+    /// Tim nhom passenger nen di chueyn tiep theo, dung boi HintBooster. Duyet mau theo thu tu outness(mau vien ngoai truoc)
+    /// voi moi mau liem tra co bus(thuong hoac wildcard) con cho ko, roi lay nhom lien ket dau tien tim duoc cua mau do.
+    /// </summary>
+    /// <returns></returns>
+    public List<Passenger> FindBestHintGroup()
+    {
+        List<PassengerColor> orderedColors = GetColorsOrderedByOuterness();
+
+        foreach (var color in orderedColors)
+        {
+            bool hasNormalSeat = BusStation.instance.GetAvailableSeatByColor(color) > 0;
+            bool hasWildcardSeat = BusStation.instance.CanWildcardAccept(color);
+
+            if (!hasNormalSeat && !hasWildcardSeat) continue;
+
+            GridNode targetNode = hasNormalSeat
+                ? BusStation.instance.GetBusByColor(color).targetNode
+                : BusStation.instance.wildcardBus.targetNode;
+
+            if (targetNode == null) continue;
+
+            // FIX: truoc day chi lay dai dien DAU TIEN tim thay (FirstOrDefault) lam seed,
+            // khong kiem tra xem nguoi do CO DUONG DI THUC SU toi bus hay khong. Gio duyet
+            // qua tung passenger cua mau nay, chi chon lam seed nguoi CHAC CHAN co duong
+            // (AStar.FindPath != null), tranh goi y nham nguoi dang bi vay kin ben trong.
+            Passenger seed = null;
+
+            foreach (var p in passengers.Where(x => x.PassengerColor == color))
+            {
+                if (!p.IsAvailableForHint) continue;
+
+                var testPath = AStar.instance.FindPath(p, p.CurrentNode, targetNode);
+
+                if (testPath != null)
+                {
+                    seed = p;
+                    break;
+                }
+            }
+
+            if (seed == null) continue; // Ca mau nay hien khong ai co duong di -> thu mau tiep theo
+
+            List<Passenger> group = seed.GetConnectedPassengers()
+                .Where(p => p.IsAvailableForHint)
+                .ToList();
+
+            if (group.Count > 0)
+            {
+                return group;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Tra ve danh sach passenger cung mau, sap xep theo do uu tien de hut vao bus qua Booster.
+    /// Uu tien tuyet doi: passenger KHONG tim duoc duong toi targetNode (chac chan dang bi chan).
+    /// Sau do: cang gan tam (center) cua toan bo dam dong cang uu tien, vi cang o "sau ben trong"
+    /// thi cang de bi cac lop ben ngoai bao vay/chan duong trong tuong lai.
+    /// </summary>
+    public List<Passenger> GetPassengersOrderedBySuctionPriority(PassengerColor color, GridNode targetNode)
+    {
+        List<Passenger> candidates = passengers
+            .Where(p => p.PassengerColor == color && p.CurrentNode != null)
+            .ToList();
+
+        if (candidates.Count == 0 || targetNode == null) return candidates;
+
+        List<Passenger> blocked = new();
+        List<Passenger> reachable = new();
+
+        foreach (var p in candidates)
+        {
+            var path = AStar.instance.FindPath(p, p.CurrentNode, targetNode);
+
+            if (path == null) blocked.Add(p);
+            else reachable.Add(p);
+        }
+
+        ComputeCenter(out float centerRow, out float centerCol);
+
+        // Cang GAN tam (khoang cach nho) -> cang "o sau ben trong" -> cang uu tien
+        blocked = blocked.OrderBy(p => DistanceFromCenter(p, centerRow, centerCol)).ToList();
+        reachable = reachable.OrderBy(p => DistanceFromCenter(p, centerRow, centerCol)).ToList();
+
+        return blocked.Concat(reachable).ToList();
+    }
+
+    void ComputeCenter(out float centerRow, out float centerCol)
+    {
+        float sumRow = 0f, sumCol = 0f;
+        int total = 0;
+
+        foreach (var p in passengers)
+        {
+            if (p.CurrentNode == null) continue;
+            sumRow += p.CurrentNode.row;
+            sumCol += p.CurrentNode.column;
+            total++;
+        }
+
+        centerRow = total > 0 ? sumRow / total : 0f;
+        centerCol = total > 0 ? sumCol / total : 0f;
+    }
+
+    float DistanceFromCenter(Passenger p, float centerRow, float centerCol)
+    {
+        float dr = p.CurrentNode.row - centerRow;
+        float dc = p.CurrentNode.column - centerCol;
+        return Mathf.Sqrt(dr * dr + dc * dc);
+    }
 }
 
 
@@ -1683,6 +2523,12 @@ public class PassengerSelector : MonoBehaviour
                 if (p != null && p.CurrentNode != null)
                 {
                     Bus nearstBus = BusStation.instance.GetNearestBusByColor(p.PassengerColor, p.transform.position);
+                    
+                    // ko co bus cung mau tren parking => di chuyển ra wilcardbus
+                    if(nearstBus == null)
+                    {
+                        nearstBus = BusStation.instance.GetWildcardBusIfAcceptable(p.PassengerColor);
+                    }
 
                     if (nearstBus == null) return;
 

@@ -10,4 +10,7 @@ public class PassengerColor : ScriptableObject
     [Header("Image Mapping")]
     public Color pixelColor;
 
+
+
+
 }
