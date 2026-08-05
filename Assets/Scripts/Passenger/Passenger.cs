@@ -1,3 +1,4 @@
+using DG.Tweening;
 using NUnit.Framework;
 using System.Collections;
 using System.Collections.Generic;
@@ -409,34 +410,44 @@ public class Passenger : MonoBehaviour
         PassengerManager.Instance.Unregister(this);
         agent.UnRegister();
 
-        StartCoroutine(JumpIntoBus(bus));
+        bus.PlayBoardEffect();
         bus.UpdateCapcity();
+        StartCoroutine(JumpIntoBus(bus));
+
 
         BusStation.instance.OnPassengerBoardedColor(PassengerColor);
     }
 
     IEnumerator JumpIntoBus(Bus bus)
     {
-        Vector3 start = transform.position;
-        Vector3 end = bus.transform.position;
+        //Vector3 start = transform.position;
+        //Vector3 end = bus.transform.position;
 
-        float duration = 0.4f;
-        float t = 0;
+        //float duration = 0.4f;
+        //float t = 0;
 
-        while (t < duration)
-        {
-            t += Time.deltaTime;
+        //while (t < duration)
+        //{
+        //    t += Time.deltaTime;
 
-            float p = t / duration;
+        //    float p = t / duration;
 
-            Vector3 pos = Vector3.Lerp(start, end, p);
+        //    Vector3 pos = Vector3.Lerp(start, end, p);
 
-            pos.y += Mathf.Sin(p * Mathf.PI) * 1.5f;
+        //    pos.y += Mathf.Sin(p * Mathf.PI) * 1.5f;
 
-            transform.position = pos;
+        //    transform.position = pos;
 
-            yield return null;
-        }
+        //    yield return null;
+        //}
+
+        bool done = false;
+
+        transform.DOJump(bus.transform.position, 1.5f, 1, 0.4f)
+                 .SetEase(Ease.OutQuad)
+                 .OnComplete(() => { done = true; });
+
+        yield return new WaitUntil(() => done);
 
         transform.SetParent(bus.transform);
 

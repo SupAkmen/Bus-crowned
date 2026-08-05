@@ -1,11 +1,9 @@
+﻿using DG.Tweening;
 using System;
 using System.Collections;
 using System.Collections.Generic;
 using TMPro;
-using Unity.VisualScripting;
 using UnityEngine;
-using UnityEngine.UIElements;
-using UnityEngine.XR;
 
 public class Bus : MonoBehaviour
 {
@@ -17,7 +15,6 @@ public class Bus : MonoBehaviour
 
     [HideInInspector] public PassengerColor passengerColor;
     [HideInInspector] public bool isWildcard = false;
-
     [HideInInspector] public List<Transform> wildcardLeavePath;
 
     [Header("Highlight")]
@@ -31,20 +28,35 @@ public class Bus : MonoBehaviour
     bool hasNotifiedFull = false;
     bool isLeaving = false;
 
+    Vector3 capacityTextOriginalScale;
+    Vector3 busOriginalScale;
+    Vector3 busOriginalPos;
+
     // Reference to parentLane ( assign by BusLane or GetCompoonentInParent)
     BusLane parentLane;
-
     public BusLane ParentLane => parentLane;
+
+    private void Awake()
+    {
+        capacityTextOriginalScale = capacityText.transform.localScale;
+        busOriginalScale = transform.localScale;
+        busOriginalPos = transform.localScale;
+
+        Debug.Log(capacityTextOriginalScale);
+    }
 
     private void Start()
     {
+        
+
         if (!capacityInitialized)
         {
             capacityInBus = capacityPerBus;
         }
+     
+        parentLane = GetComponentInParent<BusLane>();
         UpdateCapacityText();
 
-        parentLane = GetComponentInParent<BusLane>();
     }
     public void SetCapacity(int amount)
     {
@@ -56,10 +68,26 @@ public class Bus : MonoBehaviour
 
     public void SetHighLight(bool isOn)
     {
-        if (highlightIndicator != null)
+
+        if (highlightIndicator == null) return;
+        
+        highlightIndicator.SetActive(isOn);
+        
+        if(isOn)
         {
-            highlightIndicator.SetActive(isOn);
+            highlightIndicator.transform.localScale = Vector3.one;
+
+            highlightIndicator.transform
+                .DOScale(1.15f, 0.5f)
+                .SetLoops(-1, LoopType.Yoyo)
+                .SetEase(Ease.InOutSine);
         }
+        else
+        {
+            highlightIndicator.transform.DOKill();
+            highlightIndicator.transform.localScale = Vector3.one;
+        }
+
     }
 
     public void SetWildcardLeavepath(List<Transform> path)
@@ -112,9 +140,43 @@ public class Bus : MonoBehaviour
         capacityInBus = capacityInBus - 1;
     }
 
+    /// <summary>
+    /// Capacity text pop up khi tang hoac giam
+    /// </summary>
     public void UpdateCapacityText()
     {
+        Debug.Log("Original: " + capacityTextOriginalScale);
+        Debug.Log("Current: " + capacityText.transform.localScale);
+
         capacityText.text = capacityInBus.ToString();
+
+        if(capacityText != null)
+        {
+            capacityText.transform.DOKill();
+
+            capacityText.transform.localScale = capacityTextOriginalScale * 0.9f;
+
+            capacityText.transform
+                .DOScale(capacityTextOriginalScale,0.18f)
+                .SetEase(Ease.OutBack);
+        }
+    }
+
+    /// <summary>
+    /// Hieu ung xe nhun khi player nhay len xe 
+    /// </summary>
+    public void PlayBoardEffect()
+    {
+        transform.DOKill();
+
+        Sequence seq = DOTween.Sequence();
+
+        // lun xuong 
+        seq.Append (transform.DOScale( new Vector3(busOriginalScale.x *1.08f, busOriginalScale.y * 0.88f, busOriginalScale.z * 1.08f ), 0.08f));
+
+        seq.Append(transform.DOScale(new Vector3(busOriginalScale.x * 0.97f, busOriginalScale.y * 1.03f, busOriginalScale.z * 0.97f), 0.07f));
+
+        seq.Append(transform.DOScale(busOriginalScale,0.15f).SetEase(Ease.OutBounce));
     }
 
     public void MoveToGoal()
@@ -133,28 +195,32 @@ public class Bus : MonoBehaviour
 
     void TriggerFull()
     {
-        if(isWildcard)
-        {
-            if(!isLeaving)
-            {
-                isLeaving = true;
-                StartCoroutine(WildcardLeaveRoutine());
-            }
+        if (isLeaving)
             return;
-        }
 
-        // Notified parent lane
-        if (!hasNotifiedFull && parentLane != null)
-        {
-            hasNotifiedFull = true;
-            parentLane.OnParkingBusFull();
-        }
+        isLeaving = true;
 
-        if (!isLeaving)
-        {
-            isLeaving = true;
-            StartCoroutine(FollowLeavePath());
-        }
+        // Xe rung nhe khi day
+        transform
+            .DOShakePosition(0.2f, 0.08f, 20, 90, false, true)
+            .OnComplete(() =>
+            {
+                if (isWildcard)
+                {
+                    StartCoroutine(WildcardLeaveRoutine());
+                }
+                else
+                {
+                    // Notified parent lane
+                    if (!hasNotifiedFull && parentLane != null)
+                    {
+                        hasNotifiedFull = true;
+                        parentLane.OnParkingBusFull();
+                    }
+
+                    StartCoroutine(FollowLeavePath());
+                }
+            });
     }
 
     IEnumerator WildcardLeaveRoutine()

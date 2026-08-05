@@ -1,7 +1,153 @@
 ﻿========================================
 UNITY SCRIPT EXPORT
 ========================================
-Tổng số file quét được: 24
+Tổng số file quét được: 29
+
+########################################
+FILE: Assets/Scripts/Collection Coin.cs
+########################################
+
+using UnityEngine;
+
+public class CollectionCoin : MonoBehaviour
+{
+    [SerializeField] GameObject coinPrefaab;
+
+    [SerializeField] Transform spawnLocation;
+
+    void Start()
+    {
+
+    }
+
+    void Update()
+    {
+
+    }
+}
+
+
+
+########################################
+FILE: Assets/Scripts/PopUpAnimation.cs
+########################################
+
+using System.Collections;
+using UnityEngine;
+
+public class PopUpAnimation: MonoBehaviour
+{
+    [Header("References")]
+    [SerializeField] RectTransform panel;
+    [SerializeField] CanvasGroup canvasGroup;
+
+    [Header("Animation")]
+    [SerializeField] float duration = 0.3f;
+    [SerializeField] float startOffset = -40f;
+
+    [Header("Curves")]
+    [SerializeField] AnimationCurve scaleCurve = 
+        new AnimationCurve(
+            new Keyframe(0f,0f),
+            new Keyframe(0.75f,1.08f),
+            new Keyframe(1f,1f)
+            );
+    [SerializeField] AnimationCurve moveCurve = AnimationCurve.EaseInOut(0, 0, 1, 1);
+
+    [SerializeField] AnimationCurve alphaCurve = AnimationCurve.Linear(0, 0, 1, 1);
+
+    Vector2 targetPos;
+    Coroutine currentRoutine;
+
+    private void Awake()
+    {
+        if(panel == null)
+            panel = GetComponent<RectTransform>();
+
+        targetPos = panel.anchoredPosition;
+    }
+
+    private void OnEnable()
+    {
+        PlayOpen();
+    }
+
+    public void PlayOpen()
+    {
+        if (currentRoutine != null)
+            StopCoroutine(currentRoutine);
+
+        currentRoutine = StartCoroutine(OpenRoutine());
+    }
+
+    IEnumerator OpenRoutine()
+    {
+        float time = 0;
+
+        panel.localScale = Vector3.zero;
+
+        panel.anchoredPosition = targetPos + Vector2.up * startOffset;
+
+        if(canvasGroup != null)
+        {
+            canvasGroup.alpha = 0;
+        }
+
+        while(time < duration)
+        {
+            time += Time.unscaledDeltaTime;
+
+            float t = Mathf.Clamp01(time/duration);
+
+            float scale = scaleCurve.Evaluate(t);
+            float move = moveCurve.Evaluate(t);
+
+            panel.localScale = Vector3.one * scale;
+            panel.anchoredPosition = Vector2.Lerp(targetPos + Vector2.up * startOffset,targetPos,move);
+
+            if(canvasGroup != null) 
+                canvasGroup.alpha = alphaCurve.Evaluate(t);
+
+            yield return null;
+        }
+
+        panel.localScale = Vector3.one;
+        panel.anchoredPosition = targetPos;
+
+        if (canvasGroup != null)
+            canvasGroup.alpha = 1;
+    }
+
+    public void Close()
+    {
+        gameObject.SetActive(false);
+    }
+}
+
+
+
+########################################
+FILE: Assets/Scripts/UIManagerr.cs
+########################################
+
+using UnityEngine;
+
+public class UIManagerr : MonoBehaviour
+{
+    [SerializeField] GameObject settingPanel;
+
+    public void OnOpenSetting()
+    {
+        settingPanel.SetActive(true);
+    }
+
+    public void OnCloseSetting()
+    {
+        settingPanel.SetActive(false);
+    }
+}
+
+
 
 ########################################
 FILE: Assets/Scripts/Booster/ExpressBusBooster.cs
@@ -269,6 +415,180 @@ public class PassengerSuctionBooster : MonoBehaviour
 
 
 ########################################
+FILE: Assets/Scripts/Booster/SpeedBoostBooster.cs
+########################################
+
+using System.Collections;
+using TMPro;
+using UnityEngine;
+using UnityEngine.UI;
+
+public class SpeedBoostBooster : MonoBehaviour
+{
+    [Header("Settings")]
+    [SerializeField] float speedMultiplier = 2f;
+    [SerializeField] float durationMinutes = 10f;
+
+    [Header("UI")]
+    [SerializeField] Button boosterButton;
+    [SerializeField] TextMeshProUGUI countdownText;
+    [SerializeField] string idleText = "";
+
+    [Header("Images")]
+    [SerializeField] Image boosterImage;
+    [SerializeField] Sprite inActiveSprite;
+    [SerializeField] Sprite activeSprite;
+
+    private const string RemainingTimeKey = "SpeedBoost_RemainingTime";
+
+    private static float defaultTimeScale = 1f;
+
+    private float remainingTime;
+    private bool isActive;
+    private Coroutine runningCoroutine;
+
+    private void Awake()
+    {
+        remainingTime = PlayerPrefs.GetFloat(
+            RemainingTimeKey,
+            durationMinutes * 60f);
+
+        boosterImage.sprite = inActiveSprite;
+
+        if (remainingTime < durationMinutes * 60f)
+        {
+            UpdateCountdownText(remainingTime);
+        }
+        else
+        {
+            countdownText.text = idleText;
+        }
+    }
+
+    public void ActivateBooster()
+    {
+        if (isActive)
+        {
+            StopBooster();
+        }
+        else
+        {
+            StartBooster();
+        }
+    }
+
+    void StartBooster()
+    {
+        if (runningCoroutine != null)
+            StopCoroutine(runningCoroutine);
+
+        runningCoroutine = StartCoroutine(BoostRoutine());
+    }
+
+    IEnumerator BoostRoutine()
+    {
+        isActive = true;
+
+        boosterImage.sprite = activeSprite;
+
+        Time.timeScale = speedMultiplier;
+
+        float saveTimer = 0f;
+
+        while (remainingTime > 0)
+        {
+            UpdateCountdownText(remainingTime);
+
+            yield return null;
+
+            remainingTime -= Time.unscaledDeltaTime;
+
+            if (remainingTime < 0)
+                remainingTime = 0;
+
+            saveTimer += Time.unscaledDeltaTime;
+
+            if (saveTimer >= 1f)
+            {
+                SaveData();
+                saveTimer = 0f;
+            }
+        }
+
+        // Booster dùng hết
+        remainingTime = durationMinutes * 60f;
+
+        SaveData();
+
+        StopBooster(true);
+    }
+
+    void StopBooster(bool finished = false)
+    {
+        if (runningCoroutine != null)
+        {
+            StopCoroutine(runningCoroutine);
+            runningCoroutine = null;
+        }
+
+        Time.timeScale = defaultTimeScale;
+
+        isActive = false;
+
+        boosterImage.sprite = inActiveSprite;
+
+        if (finished)
+        {
+            countdownText.text = idleText;
+        }
+        else
+        {
+            UpdateCountdownText(remainingTime);
+        }
+
+        SaveData();
+    }
+
+    void UpdateCountdownText(float secondsRemaining)
+    {
+        if (countdownText == null) return;
+
+        int totalSeconds = Mathf.CeilToInt(secondsRemaining);
+
+        int minutes = totalSeconds / 60;
+        int seconds = totalSeconds % 60;
+
+        countdownText.text = $"{minutes:00}:{seconds:00}";
+    }
+
+    void SaveData()
+    {
+        PlayerPrefs.SetFloat(RemainingTimeKey, remainingTime);
+        PlayerPrefs.Save();
+    }
+
+    private void OnApplicationPause(bool pause)
+    {
+        if (pause)
+            SaveData();
+    }
+
+    private void OnApplicationQuit()
+    {
+        SaveData();
+    }
+
+    private void OnDisable()
+    {
+        if (isActive)
+        {
+            Time.timeScale = defaultTimeScale;
+        }
+    }
+}
+
+
+########################################
 FILE: Assets/Scripts/Booster/WildcardBusBooster.cs
 ########################################
 
@@ -329,14 +649,12 @@ public class WildcardBusBooster : MonoBehaviour
 FILE: Assets/Scripts/Bus/Bus.cs
 ########################################
 
+using DG.Tweening;
 using System;
 using System.Collections;
 using System.Collections.Generic;
 using TMPro;
-using Unity.VisualScripting;
 using UnityEngine;
-using UnityEngine.UIElements;
-using UnityEngine.XR;
 
 public class Bus : MonoBehaviour
 {
@@ -348,7 +666,6 @@ public class Bus : MonoBehaviour
 
     [HideInInspector] public PassengerColor passengerColor;
     [HideInInspector] public bool isWildcard = false;
-
     [HideInInspector] public List<Transform> wildcardLeavePath;
 
     [Header("Highlight")]
@@ -362,20 +679,35 @@ public class Bus : MonoBehaviour
     bool hasNotifiedFull = false;
     bool isLeaving = false;
 
+    Vector3 capacityTextOriginalScale;
+    Vector3 busOriginalScale;
+    Vector3 busOriginalPos;
+
     // Reference to parentLane ( assign by BusLane or GetCompoonentInParent)
     BusLane parentLane;
-
     public BusLane ParentLane => parentLane;
+
+    private void Awake()
+    {
+        capacityTextOriginalScale = capacityText.transform.localScale;
+        busOriginalScale = transform.localScale;
+        busOriginalPos = transform.localScale;
+
+        Debug.Log(capacityTextOriginalScale);
+    }
 
     private void Start()
     {
+        
+
         if (!capacityInitialized)
         {
             capacityInBus = capacityPerBus;
         }
+     
+        parentLane = GetComponentInParent<BusLane>();
         UpdateCapacityText();
 
-        parentLane = GetComponentInParent<BusLane>();
     }
     public void SetCapacity(int amount)
     {
@@ -387,10 +719,26 @@ public class Bus : MonoBehaviour
 
     public void SetHighLight(bool isOn)
     {
-        if (highlightIndicator != null)
+
+        if (highlightIndicator == null) return;
+        
+        highlightIndicator.SetActive(isOn);
+        
+        if(isOn)
         {
-            highlightIndicator.SetActive(isOn);
+            highlightIndicator.transform.localScale = Vector3.one;
+
+            highlightIndicator.transform
+                .DOScale(1.15f, 0.5f)
+                .SetLoops(-1, LoopType.Yoyo)
+                .SetEase(Ease.InOutSine);
         }
+        else
+        {
+            highlightIndicator.transform.DOKill();
+            highlightIndicator.transform.localScale = Vector3.one;
+        }
+
     }
 
     public void SetWildcardLeavepath(List<Transform> path)
@@ -443,9 +791,43 @@ public class Bus : MonoBehaviour
         capacityInBus = capacityInBus - 1;
     }
 
+    /// <summary>
+    /// Capacity text pop up khi tang hoac giam
+    /// </summary>
     public void UpdateCapacityText()
     {
+        Debug.Log("Original: " + capacityTextOriginalScale);
+        Debug.Log("Current: " + capacityText.transform.localScale);
+
         capacityText.text = capacityInBus.ToString();
+
+        if(capacityText != null)
+        {
+            capacityText.transform.DOKill();
+
+            capacityText.transform.localScale = capacityTextOriginalScale * 0.9f;
+
+            capacityText.transform
+                .DOScale(capacityTextOriginalScale,0.18f)
+                .SetEase(Ease.OutBack);
+        }
+    }
+
+    /// <summary>
+    /// Hieu ung xe nhun khi player nhay len xe 
+    /// </summary>
+    public void PlayBoardEffect()
+    {
+        transform.DOKill();
+
+        Sequence seq = DOTween.Sequence();
+
+        // lun xuong 
+        seq.Append (transform.DOScale( new Vector3(busOriginalScale.x *1.08f, busOriginalScale.y * 0.88f, busOriginalScale.z * 1.08f ), 0.08f));
+
+        seq.Append(transform.DOScale(new Vector3(busOriginalScale.x * 0.97f, busOriginalScale.y * 1.03f, busOriginalScale.z * 0.97f), 0.07f));
+
+        seq.Append(transform.DOScale(busOriginalScale,0.15f).SetEase(Ease.OutBounce));
     }
 
     public void MoveToGoal()
@@ -464,28 +846,32 @@ public class Bus : MonoBehaviour
 
     void TriggerFull()
     {
-        if(isWildcard)
-        {
-            if(!isLeaving)
-            {
-                isLeaving = true;
-                StartCoroutine(WildcardLeaveRoutine());
-            }
+        if (isLeaving)
             return;
-        }
 
-        // Notified parent lane
-        if (!hasNotifiedFull && parentLane != null)
-        {
-            hasNotifiedFull = true;
-            parentLane.OnParkingBusFull();
-        }
+        isLeaving = true;
 
-        if (!isLeaving)
-        {
-            isLeaving = true;
-            StartCoroutine(FollowLeavePath());
-        }
+        // Xe rung nhe khi day
+        transform
+            .DOShakePosition(0.2f, 0.08f, 20, 90, false, true)
+            .OnComplete(() =>
+            {
+                if (isWildcard)
+                {
+                    StartCoroutine(WildcardLeaveRoutine());
+                }
+                else
+                {
+                    // Notified parent lane
+                    if (!hasNotifiedFull && parentLane != null)
+                    {
+                        hasNotifiedFull = true;
+                        parentLane.OnParkingBusFull();
+                    }
+
+                    StartCoroutine(FollowLeavePath());
+                }
+            });
     }
 
     IEnumerator WildcardLeaveRoutine()
@@ -584,6 +970,8 @@ public class Bus : MonoBehaviour
 
         index++;
 
+        Destroy(gameObject);
+
     }
 
     public IEnumerator ExpressLeaveAndRejoinGaragfe(List<Transform> outPath,BusLane targetLane,float speed)
@@ -638,6 +1026,7 @@ public class Bus : MonoBehaviour
 FILE: Assets/Scripts/Bus/BusLane.cs
 ########################################
 
+using DG.Tweening;
 using NUnit.Framework;
 using System.Collections;
 using System.Collections.Generic;
@@ -804,6 +1193,7 @@ public class BusLane : MonoBehaviour
         }
 
         bus.transform.position = targetPos;
+        bus.transform.DOPunchScale(Vector3.one * 0.15f, 0.25f);
     }
 }
 
@@ -1125,18 +1515,9 @@ public class BusStation : MonoBehaviour
     }
 
 
-    /// <summary>
-    /// Goi moi khi 1 passenger vua len BAT KY bus nao (thuong, wildcard, suction...).
-    /// Thay vi chi kiem tra "da het hoan toan" (== 0), ham nay so sanh TRUC TIEP tong so
-    /// ghe da cam ket (committed) tren cac bus THUONG cua mau nay (dang dau + trong garage)
-    /// voi so nguoi THUC SU con lai. Neu committed > remaining (vi du do Wildcard da "an
-    /// bot" mot phan khach), phan du thua se bi cat bo NGAY, bat dau tu cuoi hang garage
-    /// (an toan nhat vi chua ai dang huong toi). Cach nay chinh xac va manh hon nhieu so
-    /// voi cach cu chi phan ung dung luc == 0, tranh sai so tich luy hoac bo sot truong hop.
-    /// </summary>
     public void OnPassengerBoardedColor(PassengerColor color)
     {
-        if (color == null) return; // wildcard bus khong co mau co dinh, bo qua
+        if (color == null) return;
 
         int remaining = PassengerManager.Instance.GetCountByColor(color);
 
@@ -1160,24 +1541,39 @@ public class BusStation : MonoBehaviour
         int excess = committed - remaining;
         if (excess <= 0) return;
 
-        // Cat tu CUOI hang garage truoc - bus nay chua ai dang huong toi, huy an toan nhat
+        // Cắt từ CUỐI hàng garage trước - bus này chưa ai đang hướng tới, hủy an toàn nhất.
+        // QUAN TRỌNG: chỉ hủy NGUYÊN bus khi toàn bộ ghế trống của nó đều là dư thừa
+        // (seat <= excess). Nếu seat > excess, nghĩa là bus này vẫn cần thiết để chở
+        // phần passenger còn lại -> chỉ GIẢM capacity đúng bằng phần dư, không phá cả bus.
         foreach (var lane in busLanes)
         {
-            for (int i = lane.garageBuses.Count - 1; i >= 0 && excess > 0; i--)
+            for (int i = lane.garageBuses.Count - 1; i >= 1 && excess > 0; i--)
             {
                 Bus bus = lane.garageBuses[i];
                 if (bus == null || bus.passengerColor != color) continue;
 
                 int seat = bus.GetAvailableSeat();
-                lane.garageBuses.RemoveAt(i);
-                Destroy(bus.gameObject);
-                excess -= seat;
+
+                if (seat <= excess)
+                {
+                    // Toàn bộ bus này là dư thừa -> xóa hẳn
+                    lane.garageBuses.RemoveAt(i);
+                    Destroy(bus.gameObject);
+                    excess -= seat;
+                }
+                else
+                {
+                    // Chỉ một phần capacity là dư thừa -> giảm capacity, GIỮ LẠI bus
+                    // vì nó vẫn cần chở (seat - excess) passenger còn lại của màu này
+                    bus.SetCapacity(seat - excess);
+                    excess = 0;
+                }
             }
 
             lane.RefreshGaragePositions();
         }
 
-        // Neu van con du VA remaining da that su ve 0 -> ep bus dang dau (neu co) roi som
+        // Nếu vẫn còn dư VÀ remaining đã thật sự về 0 -> ép bus đang đậu (nếu có) rời sớm
         if (excess > 0 && remaining == 0)
         {
             foreach (var bus in parkingBusList.ToList())
@@ -1225,6 +1621,27 @@ public class BusTrigger : MonoBehaviour
 
         passenger.EnterBus(bus);
     }
+}
+
+
+
+########################################
+FILE: Assets/Scripts/Manager/GameManager.cs
+########################################
+
+using UnityEngine;
+
+public class GameManager : MonoBehaviour
+{
+     void Start()
+       {
+       		 
+        }
+
+     void Update()
+       {
+       		 
+        }
 }
 
 
@@ -1474,6 +1891,7 @@ public class MovementBoundary : MonoBehaviour
 FILE: Assets/Scripts/Passenger/Passenger.cs
 ########################################
 
+using DG.Tweening;
 using NUnit.Framework;
 using System.Collections;
 using System.Collections.Generic;
@@ -1885,34 +2303,44 @@ public class Passenger : MonoBehaviour
         PassengerManager.Instance.Unregister(this);
         agent.UnRegister();
 
-        StartCoroutine(JumpIntoBus(bus));
+        bus.PlayBoardEffect();
         bus.UpdateCapcity();
+        StartCoroutine(JumpIntoBus(bus));
+
 
         BusStation.instance.OnPassengerBoardedColor(PassengerColor);
     }
 
     IEnumerator JumpIntoBus(Bus bus)
     {
-        Vector3 start = transform.position;
-        Vector3 end = bus.transform.position;
+        //Vector3 start = transform.position;
+        //Vector3 end = bus.transform.position;
 
-        float duration = 0.4f;
-        float t = 0;
+        //float duration = 0.4f;
+        //float t = 0;
 
-        while (t < duration)
-        {
-            t += Time.deltaTime;
+        //while (t < duration)
+        //{
+        //    t += Time.deltaTime;
 
-            float p = t / duration;
+        //    float p = t / duration;
 
-            Vector3 pos = Vector3.Lerp(start, end, p);
+        //    Vector3 pos = Vector3.Lerp(start, end, p);
 
-            pos.y += Mathf.Sin(p * Mathf.PI) * 1.5f;
+        //    pos.y += Mathf.Sin(p * Mathf.PI) * 1.5f;
 
-            transform.position = pos;
+        //    transform.position = pos;
 
-            yield return null;
-        }
+        //    yield return null;
+        //}
+
+        bool done = false;
+
+        transform.DOJump(bus.transform.position, 1.5f, 1, 0.4f)
+                 .SetEase(Ease.OutQuad)
+                 .OnComplete(() => { done = true; });
+
+        yield return new WaitUntil(() => done);
 
         transform.SetParent(bus.transform);
 

@@ -1,3 +1,4 @@
+using DG.Tweening;
 using NUnit.Framework;
 using System.Collections;
 using System.Collections.Generic;
@@ -164,5 +165,6 @@ public class BusLane : MonoBehaviour
         }
 
         bus.transform.position = targetPos;
+        bus.transform.DOPunchScale(Vector3.one * 0.15f, 0.25f);
     }
 }
