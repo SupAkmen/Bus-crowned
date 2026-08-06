@@ -1,4 +1,4 @@
-using NUnit.Framework;
+﻿using NUnit.Framework;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -75,18 +75,23 @@ public class PassengerSpawnAreas : MonoBehaviour
     int columns;
     int rows;
 
+    // Sửa trong file PassengerSpawnAreas.cs
     private void Start()
     {
         rows = Mathf.FloorToInt(height / spaceZ);
         columns = Mathf.FloorToInt(width / spaceX);
 
-        // >>> THAY DOI: bat dau ==========================================
-        // Truoc day chi goi thang SpawnPassengers(), gio re nhanh theo layoutImage
+        // >>> BẮT ĐẦU SỬA: Lấy Layout động từ LevelManager
+        if (LevelManager.Instance != null && LevelManager.Instance.GetCurrentLevelConfig() != null)
+        {
+            layoutImage = LevelManager.Instance.GetCurrentLevelConfig().layoutImage;
+        }
+        // >>> KẾT THÚC SỬA
+
         if (layoutImage != null)
             SpawnFromImage();
         else
             SpawnPassengers();
-        // >>> THAY DOI: ket thuc ==========================================
     }
 
 

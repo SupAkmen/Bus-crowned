@@ -27,10 +27,7 @@ public class BusLane : MonoBehaviour
     public void SetParkingBus(Bus bus) => parkingBus = bus;
 
     [Header("Express Bus Path")]
-    [Tooltip("Duong di rieng cua LANE NAY khi bus bi Booster Express rung ra ngoai. " +
-         "Moi lane co vi tri vat ly khac nhau nen can duong di khac nhau, mo phong " +
-         "duong mau do rieng cho lane do. Diem cuoi la noi bus 'khuat tam nhin' " +
-         "truoc khi duoc dua thang vao garage.")]
+    [Tooltip("Duong di cho express bus chay ra ngoai truoc khi quay lai garage")]
     public List<Transform> expressOutPath;
 
     /// <summary>
@@ -74,7 +71,6 @@ public class BusLane : MonoBehaviour
 
         // Parking bus move to the goal 
         // Garage bus -> parking bus 
-
         yield return StartCoroutine(PullNextGarageBusRoutine());
     }
 
@@ -82,7 +78,6 @@ public class BusLane : MonoBehaviour
     {
         StartCoroutine(PullNextGarageBusRoutine());
     }
-
 
     IEnumerator PullNextGarageBusRoutine()
     {
@@ -104,7 +99,6 @@ public class BusLane : MonoBehaviour
 
             nextBus.targetNode = PassengerGrid.Instance.GetNearestNode(parkingPosition.position);
 
-
             // 3. Other garage bus push one position
             RefreshGaragePositions();
         }
@@ -119,8 +113,9 @@ public class BusLane : MonoBehaviour
         garageBuses.Add(bus);
         RefreshGaragePositions();
     }
+
     /// <summary>
-    /// Di chuyen lai toan bo bus trong garage ve dung vi tri slot theo thu tu hien tai dung sau khi garage thaty doi ( bus toi di hoa bus moi duoc them vao cuoi hang)
+    /// Di chuyen lai toan bo bus trong garage ve dung vi tri slot theo thu tu hien tai dung sau khi garage thay doi ( bus toi di hoa bus moi duoc them vao cuoi hang)
     /// </summary>
     public void RefreshGaragePositions()
     {

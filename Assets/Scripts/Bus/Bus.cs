@@ -7,7 +7,6 @@ using UnityEngine;
 
 public class Bus : MonoBehaviour
 {
-
     [SerializeField] public int capacityPerBus = 30;
     [SerializeField] TextMeshPro capacityText;
     [SerializeField] float busSpeed = 5f;
@@ -18,8 +17,7 @@ public class Bus : MonoBehaviour
     [HideInInspector] public List<Transform> wildcardLeavePath;
 
     [Header("Highlight")]
-    [Tooltip("GameObject hieu ung glow/outline, la con cua Bus prefab, mac dinh tat. " +
-         "Bat len khi mot Booster dang cho nguoi choi chon bus nay.")]
+    [Tooltip("GameObject hieu ung glow/outline, la con cua Bus prefab, mac dinh tat.Bat len khi mot Booster dang cho nguoi choi chon bus nay.")]
     [SerializeField] GameObject highlightIndicator;
 
     public GridNode targetNode;
@@ -40,15 +38,17 @@ public class Bus : MonoBehaviour
     {
         capacityTextOriginalScale = capacityText.transform.localScale;
         busOriginalScale = transform.localScale;
-        busOriginalPos = transform.localScale;
+        busOriginalPos = transform.localPosition;
 
-        Debug.Log(capacityTextOriginalScale);
+
+        if (BusStation.instance != null)
+        {
+            BusStation.instance.RegisterActiveBus(this);
+        }
     }
 
     private void Start()
     {
-        
-
         if (!capacityInitialized)
         {
             capacityInBus = capacityPerBus;
@@ -56,7 +56,6 @@ public class Bus : MonoBehaviour
      
         parentLane = GetComponentInParent<BusLane>();
         UpdateCapacityText();
-
     }
     public void SetCapacity(int amount)
     {
@@ -65,14 +64,12 @@ public class Bus : MonoBehaviour
         UpdateCapacityText();
     }
 
-
     public void SetHighLight(bool isOn)
     {
-
         if (highlightIndicator == null) return;
         
         highlightIndicator.SetActive(isOn);
-        
+ 
         if(isOn)
         {
             highlightIndicator.transform.localScale = Vector3.one;
@@ -87,7 +84,6 @@ public class Bus : MonoBehaviour
             highlightIndicator.transform.DOKill();
             highlightIndicator.transform.localScale = Vector3.one;
         }
-
     }
 
     public void SetWildcardLeavepath(List<Transform> path)
@@ -95,13 +91,18 @@ public class Bus : MonoBehaviour
         wildcardLeavePath = path;
     }
 
-
     private void OnDisable()
     {
+        // Huy toan bo tween cua xe truoc khi xoa
+        transform.DOKill();
+
         if (BusStation.instance != null)
         {
             BusStation.instance.UnRegisterParkingBus(this);
             BusStation.instance.UnRegisterWildcardBus(this);
+
+            
+            BusStation.instance.UnregisterActiveBus(this);
         }
     }
 
@@ -145,9 +146,6 @@ public class Bus : MonoBehaviour
     /// </summary>
     public void UpdateCapacityText()
     {
-        Debug.Log("Original: " + capacityTextOriginalScale);
-        Debug.Log("Current: " + capacityText.transform.localScale);
-
         capacityText.text = capacityInBus.ToString();
 
         if(capacityText != null)
@@ -171,7 +169,7 @@ public class Bus : MonoBehaviour
 
         Sequence seq = DOTween.Sequence();
 
-        // lun xuong 
+        // Tao hieu ung lun xuong va bat nay len
         seq.Append (transform.DOScale( new Vector3(busOriginalScale.x *1.08f, busOriginalScale.y * 0.88f, busOriginalScale.z * 1.08f ), 0.08f));
 
         seq.Append(transform.DOScale(new Vector3(busOriginalScale.x * 0.97f, busOriginalScale.y * 1.03f, busOriginalScale.z * 0.97f), 0.07f));
@@ -240,7 +238,6 @@ public class Bus : MonoBehaviour
 
         Destroy(gameObject);
     }
-
 
     /// <summary>
     /// Dung cho booster express bus : ep bus roi khoi parking ngay lap tuc du chua day khach, tai su dung chuoi FollowLeavePath + OnParkingBusFull() co san
@@ -318,9 +315,7 @@ public class Bus : MonoBehaviour
         }
 
         index++;
-
         Destroy(gameObject);
-
     }
 
     public IEnumerator ExpressLeaveAndRejoinGaragfe(List<Transform> outPath,BusLane targetLane,float speed)

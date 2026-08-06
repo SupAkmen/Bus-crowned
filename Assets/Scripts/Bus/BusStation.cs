@@ -4,21 +4,20 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
+using UnityEngine.InputSystem;
 using UnityEngine.UIElements.Experimental;
 
 public class BusStation : MonoBehaviour
 {
     public static BusStation instance;
-
     public BusLane[] busLanes;
 
     [Header("Spawn")]
     [SerializeField] public Bus busPrefab;
 
-    // The list of car in parking 
-    [HideInInspector] public List<Bus> parkingBusList = new List<Bus>();
-
+    [HideInInspector] public List<Bus> parkingBusList = new List<Bus>(); // Danh sach bus o parking
     [HideInInspector] public Bus wildcardBus;
+    public List<Bus> allBuses = new List<Bus>(); // Danh sach cac xe bus dang ton tai
 
     private void Awake()
     {
@@ -27,6 +26,18 @@ public class BusStation : MonoBehaviour
     private void Start()
     {
         StartCoroutine(InitializeBusesRoutine());
+    }
+
+    public void RegisterActiveBus(Bus bus)
+    {
+        if (!allBuses.Contains(bus))
+            allBuses.Add(bus);
+    }
+
+    public void UnregisterActiveBus(Bus bus)
+    {
+        if (allBuses.Contains(bus))
+            allBuses.Remove(bus);
     }
 
     public void RegisterWildcardBus(Bus bus)
@@ -41,6 +52,21 @@ public class BusStation : MonoBehaviour
             wildcardBus = null;
         }
     }
+
+    public void RegisterParkingBus(Bus bus)
+    {
+        if (!parkingBusList.Contains(bus))
+        {
+            parkingBusList.Add(bus);
+            bus.targetNode = PassengerGrid.Instance.GetNearestNode(bus.transform.position);
+        }
+    }
+
+    public void UnRegisterParkingBus(Bus bus)
+    {
+        parkingBusList.Remove(bus);
+    }
+
     public bool CanWildcardAccept(PassengerColor color)
     {
         if(wildcardBus == null || wildcardBus.GetAvailableSeat() <= 0)
@@ -73,8 +99,7 @@ public class BusStation : MonoBehaviour
         int laneCount = busLanes.Length;
         int ticketIndex = 0;
 
-        // Nếu bus đầu tiên trong garage trùng màu với bus parking
-        // thì đổi với lane khác nếu có thể.
+        // Neu bus dau tien o garage trung mau voi mau xe o parking bus thi doi di neu co the
         for (int i = 0; i < laneCount; i++)
         {
             int garageIndex = laneCount + i;
@@ -98,7 +123,6 @@ public class BusStation : MonoBehaviour
         }
 
         // Pha 1 : spawn tai vi tri parking
-
         for (int i = 0; i < laneCount && ticketIndex < ticketQueue.Count; i++)
         {
             BusLane lane = busLanes[i];
@@ -112,7 +136,6 @@ public class BusStation : MonoBehaviour
         }
 
         // Pha 2 : Spawn bus con lai chia deu (round-robin) vao garage cua tung lane
-
         int[] garaFillIndex = new int[laneCount];
 
         while(ticketIndex < ticketQueue.Count)
@@ -191,7 +214,6 @@ public class BusStation : MonoBehaviour
         List<BusTicket> garageTickets = new();
 
         // Bus dau tien cua moi mau -> parking
-
         foreach (Queue<BusTicket> q in perColorQueues)
         {
             if(q.Count > 0)
@@ -215,11 +237,9 @@ public class BusStation : MonoBehaviour
                 }
             }
         }
-
         parkingTickets.AddRange(garageTickets);
 
         return parkingTickets;
-
     }
 
     Bus SpawnBus(BusTicket ticket,Vector3 position,Transform parent)
@@ -233,29 +253,7 @@ public class BusStation : MonoBehaviour
         return bus;
     }
 
-    void Shuffle<T>(List<T> list)
-    {
-        for(int i = list.Count - 1; i > 0; i--)
-        {
-            int j = Random.Range(0, i + 1);
-
-            (list[i], list[j]) = (list[j], list[i]);
-        }
-    }
-
-    public void RegisterParkingBus(Bus bus)
-    {
-        if (!parkingBusList.Contains(bus))
-        {
-            parkingBusList.Add(bus);
-            bus.targetNode = PassengerGrid.Instance.GetNearestNode(bus.transform.position);
-        }
-    }
-
-    public void UnRegisterParkingBus(Bus bus)
-    {
-        parkingBusList.Remove(bus);
-    }
+ 
 
     public Bus GetNearestBusByColor(PassengerColor color, Vector3 fromPosition)
     {
@@ -296,6 +294,7 @@ public class BusStation : MonoBehaviour
 
         return null;
     }
+
     /// <summary>
     /// Get the number of available spaces in the parking lane of the corresponding color.
     /// </summary>
@@ -336,10 +335,7 @@ public class BusStation : MonoBehaviour
         int excess = committed - remaining;
         if (excess <= 0) return;
 
-        // Cắt từ CUỐI hàng garage trước - bus này chưa ai đang hướng tới, hủy an toàn nhất.
-        // QUAN TRỌNG: chỉ hủy NGUYÊN bus khi toàn bộ ghế trống của nó đều là dư thừa
-        // (seat <= excess). Nếu seat > excess, nghĩa là bus này vẫn cần thiết để chở
-        // phần passenger còn lại -> chỉ GIẢM capacity đúng bằng phần dư, không phá cả bus.
+        // Passenger di vao wildcardbus -> bus cung mau o cuoi garage se tru dan di so luong bang so luong len wildcard 
         foreach (var lane in busLanes)
         {
             for (int i = lane.garageBuses.Count - 1; i >= 1 && excess > 0; i--)
@@ -351,15 +347,14 @@ public class BusStation : MonoBehaviour
 
                 if (seat <= excess)
                 {
-                    // Toàn bộ bus này là dư thừa -> xóa hẳn
+                    // So luong len wildcard > seat cua xe =>  xoa han bus
                     lane.garageBuses.RemoveAt(i);
                     Destroy(bus.gameObject);
                     excess -= seat;
                 }
                 else
                 {
-                    // Chỉ một phần capacity là dư thừa -> giảm capacity, GIỮ LẠI bus
-                    // vì nó vẫn cần chở (seat - excess) passenger còn lại của màu này
+                    // So luong len wildcard < seat cua xe => tru di so hanh khach kia 
                     bus.SetCapacity(seat - excess);
                     excess = 0;
                 }
@@ -368,7 +363,7 @@ public class BusStation : MonoBehaviour
             lane.RefreshGaragePositions();
         }
 
-        // Nếu vẫn còn dư VÀ remaining đã thật sự về 0 -> ép bus đang đậu (nếu có) rời sớm
+        // Neu van con du va remaining ve 0 -> ep bus dang dau ( neu co ) roi ben
         if (excess > 0 && remaining == 0)
         {
             foreach (var bus in parkingBusList.ToList())

@@ -24,13 +24,10 @@ public class WildcardBusBooster : MonoBehaviour
     {
         if (BusStation.instance.wildcardBus != null)
         {
-            Debug.Log("[WildcardBusBooster] Da co mot Wildcard Bus dang hoat dong.");
             return;
         }
 
         StartCoroutine(SpawnAndMoveRoutine());
-
-        Debug.Log("WildcardBus Booster");
     }
 
     IEnumerator SpawnAndMoveRoutine()

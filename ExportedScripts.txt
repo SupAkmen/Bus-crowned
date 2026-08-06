@@ -1,32 +1,7 @@
 ﻿========================================
 UNITY SCRIPT EXPORT
 ========================================
-Tổng số file quét được: 29
-
-########################################
-FILE: Assets/Scripts/Collection Coin.cs
-########################################
-
-using UnityEngine;
-
-public class CollectionCoin : MonoBehaviour
-{
-    [SerializeField] GameObject coinPrefaab;
-
-    [SerializeField] Transform spawnLocation;
-
-    void Start()
-    {
-
-    }
-
-    void Update()
-    {
-
-    }
-}
-
-
+Tổng số file quét được: 35
 
 ########################################
 FILE: Assets/Scripts/PopUpAnimation.cs
@@ -127,29 +102,6 @@ public class PopUpAnimation: MonoBehaviour
 
 
 ########################################
-FILE: Assets/Scripts/UIManagerr.cs
-########################################
-
-using UnityEngine;
-
-public class UIManagerr : MonoBehaviour
-{
-    [SerializeField] GameObject settingPanel;
-
-    public void OnOpenSetting()
-    {
-        settingPanel.SetActive(true);
-    }
-
-    public void OnCloseSetting()
-    {
-        settingPanel.SetActive(false);
-    }
-}
-
-
-
-########################################
 FILE: Assets/Scripts/Booster/ExpressBusBooster.cs
 ########################################
 
@@ -202,7 +154,6 @@ public class ExpressBusBooster : MonoBehaviour
 
         isSelecting = true;
         SetHighLight(true);
-        Debug.Log("ExpressBus Booster");
     }
 
     void EndSelection()
@@ -262,8 +213,6 @@ public class HintBooster : MonoBehaviour
         {
             p.SetHighLight(true, highlightDuration);
         }
-
-        Debug.Log("Hint booster");
     }
 }
 
@@ -618,13 +567,10 @@ public class WildcardBusBooster : MonoBehaviour
     {
         if (BusStation.instance.wildcardBus != null)
         {
-            Debug.Log("[WildcardBusBooster] Da co mot Wildcard Bus dang hoat dong.");
             return;
         }
 
         StartCoroutine(SpawnAndMoveRoutine());
-
-        Debug.Log("WildcardBus Booster");
     }
 
     IEnumerator SpawnAndMoveRoutine()
@@ -658,7 +604,6 @@ using UnityEngine;
 
 public class Bus : MonoBehaviour
 {
-
     [SerializeField] public int capacityPerBus = 30;
     [SerializeField] TextMeshPro capacityText;
     [SerializeField] float busSpeed = 5f;
@@ -669,8 +614,7 @@ public class Bus : MonoBehaviour
     [HideInInspector] public List<Transform> wildcardLeavePath;
 
     [Header("Highlight")]
-    [Tooltip("GameObject hieu ung glow/outline, la con cua Bus prefab, mac dinh tat. " +
-         "Bat len khi mot Booster dang cho nguoi choi chon bus nay.")]
+    [Tooltip("GameObject hieu ung glow/outline, la con cua Bus prefab, mac dinh tat.Bat len khi mot Booster dang cho nguoi choi chon bus nay.")]
     [SerializeField] GameObject highlightIndicator;
 
     public GridNode targetNode;
@@ -691,15 +635,17 @@ public class Bus : MonoBehaviour
     {
         capacityTextOriginalScale = capacityText.transform.localScale;
         busOriginalScale = transform.localScale;
-        busOriginalPos = transform.localScale;
+        busOriginalPos = transform.localPosition;
 
-        Debug.Log(capacityTextOriginalScale);
+
+        if (BusStation.instance != null)
+        {
+            BusStation.instance.RegisterActiveBus(this);
+        }
     }
 
     private void Start()
     {
-        
-
         if (!capacityInitialized)
         {
             capacityInBus = capacityPerBus;
@@ -707,7 +653,6 @@ public class Bus : MonoBehaviour
      
         parentLane = GetComponentInParent<BusLane>();
         UpdateCapacityText();
-
     }
     public void SetCapacity(int amount)
     {
@@ -716,14 +661,12 @@ public class Bus : MonoBehaviour
         UpdateCapacityText();
     }
 
-
     public void SetHighLight(bool isOn)
     {
-
         if (highlightIndicator == null) return;
         
         highlightIndicator.SetActive(isOn);
-        
+ 
         if(isOn)
         {
             highlightIndicator.transform.localScale = Vector3.one;
@@ -738,7 +681,6 @@ public class Bus : MonoBehaviour
             highlightIndicator.transform.DOKill();
             highlightIndicator.transform.localScale = Vector3.one;
         }
-
     }
 
     public void SetWildcardLeavepath(List<Transform> path)
@@ -746,13 +688,18 @@ public class Bus : MonoBehaviour
         wildcardLeavePath = path;
     }
 
-
     private void OnDisable()
     {
+        // Huy toan bo tween cua xe truoc khi xoa
+        transform.DOKill();
+
         if (BusStation.instance != null)
         {
             BusStation.instance.UnRegisterParkingBus(this);
             BusStation.instance.UnRegisterWildcardBus(this);
+
+            
+            BusStation.instance.UnregisterActiveBus(this);
         }
     }
 
@@ -796,9 +743,6 @@ public class Bus : MonoBehaviour
     /// </summary>
     public void UpdateCapacityText()
     {
-        Debug.Log("Original: " + capacityTextOriginalScale);
-        Debug.Log("Current: " + capacityText.transform.localScale);
-
         capacityText.text = capacityInBus.ToString();
 
         if(capacityText != null)
@@ -822,7 +766,7 @@ public class Bus : MonoBehaviour
 
         Sequence seq = DOTween.Sequence();
 
-        // lun xuong 
+        // Tao hieu ung lun xuong va bat nay len
         seq.Append (transform.DOScale( new Vector3(busOriginalScale.x *1.08f, busOriginalScale.y * 0.88f, busOriginalScale.z * 1.08f ), 0.08f));
 
         seq.Append(transform.DOScale(new Vector3(busOriginalScale.x * 0.97f, busOriginalScale.y * 1.03f, busOriginalScale.z * 0.97f), 0.07f));
@@ -891,7 +835,6 @@ public class Bus : MonoBehaviour
 
         Destroy(gameObject);
     }
-
 
     /// <summary>
     /// Dung cho booster express bus : ep bus roi khoi parking ngay lap tuc du chua day khach, tai su dung chuoi FollowLeavePath + OnParkingBusFull() co san
@@ -969,9 +912,7 @@ public class Bus : MonoBehaviour
         }
 
         index++;
-
         Destroy(gameObject);
-
     }
 
     public IEnumerator ExpressLeaveAndRejoinGaragfe(List<Transform> outPath,BusLane targetLane,float speed)
@@ -1055,10 +996,7 @@ public class BusLane : MonoBehaviour
     public void SetParkingBus(Bus bus) => parkingBus = bus;
 
     [Header("Express Bus Path")]
-    [Tooltip("Duong di rieng cua LANE NAY khi bus bi Booster Express rung ra ngoai. " +
-         "Moi lane co vi tri vat ly khac nhau nen can duong di khac nhau, mo phong " +
-         "duong mau do rieng cho lane do. Diem cuoi la noi bus 'khuat tam nhin' " +
-         "truoc khi duoc dua thang vao garage.")]
+    [Tooltip("Duong di cho express bus chay ra ngoai truoc khi quay lai garage")]
     public List<Transform> expressOutPath;
 
     /// <summary>
@@ -1102,7 +1040,6 @@ public class BusLane : MonoBehaviour
 
         // Parking bus move to the goal 
         // Garage bus -> parking bus 
-
         yield return StartCoroutine(PullNextGarageBusRoutine());
     }
 
@@ -1110,7 +1047,6 @@ public class BusLane : MonoBehaviour
     {
         StartCoroutine(PullNextGarageBusRoutine());
     }
-
 
     IEnumerator PullNextGarageBusRoutine()
     {
@@ -1132,7 +1068,6 @@ public class BusLane : MonoBehaviour
 
             nextBus.targetNode = PassengerGrid.Instance.GetNearestNode(parkingPosition.position);
 
-
             // 3. Other garage bus push one position
             RefreshGaragePositions();
         }
@@ -1147,8 +1082,9 @@ public class BusLane : MonoBehaviour
         garageBuses.Add(bus);
         RefreshGaragePositions();
     }
+
     /// <summary>
-    /// Di chuyen lai toan bo bus trong garage ve dung vi tri slot theo thu tu hien tai dung sau khi garage thaty doi ( bus toi di hoa bus moi duoc them vao cuoi hang)
+    /// Di chuyen lai toan bo bus trong garage ve dung vi tri slot theo thu tu hien tai dung sau khi garage thay doi ( bus toi di hoa bus moi duoc them vao cuoi hang)
     /// </summary>
     public void RefreshGaragePositions()
     {
@@ -1209,21 +1145,20 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
+using UnityEngine.InputSystem;
 using UnityEngine.UIElements.Experimental;
 
 public class BusStation : MonoBehaviour
 {
     public static BusStation instance;
-
     public BusLane[] busLanes;
 
     [Header("Spawn")]
     [SerializeField] public Bus busPrefab;
 
-    // The list of car in parking 
-    [HideInInspector] public List<Bus> parkingBusList = new List<Bus>();
-
+    [HideInInspector] public List<Bus> parkingBusList = new List<Bus>(); // Danh sach bus o parking
     [HideInInspector] public Bus wildcardBus;
+    public List<Bus> allBuses = new List<Bus>(); // Danh sach cac xe bus dang ton tai
 
     private void Awake()
     {
@@ -1232,6 +1167,18 @@ public class BusStation : MonoBehaviour
     private void Start()
     {
         StartCoroutine(InitializeBusesRoutine());
+    }
+
+    public void RegisterActiveBus(Bus bus)
+    {
+        if (!allBuses.Contains(bus))
+            allBuses.Add(bus);
+    }
+
+    public void UnregisterActiveBus(Bus bus)
+    {
+        if (allBuses.Contains(bus))
+            allBuses.Remove(bus);
     }
 
     public void RegisterWildcardBus(Bus bus)
@@ -1246,6 +1193,21 @@ public class BusStation : MonoBehaviour
             wildcardBus = null;
         }
     }
+
+    public void RegisterParkingBus(Bus bus)
+    {
+        if (!parkingBusList.Contains(bus))
+        {
+            parkingBusList.Add(bus);
+            bus.targetNode = PassengerGrid.Instance.GetNearestNode(bus.transform.position);
+        }
+    }
+
+    public void UnRegisterParkingBus(Bus bus)
+    {
+        parkingBusList.Remove(bus);
+    }
+
     public bool CanWildcardAccept(PassengerColor color)
     {
         if(wildcardBus == null || wildcardBus.GetAvailableSeat() <= 0)
@@ -1278,8 +1240,7 @@ public class BusStation : MonoBehaviour
         int laneCount = busLanes.Length;
         int ticketIndex = 0;
 
-        // Nếu bus đầu tiên trong garage trùng màu với bus parking
-        // thì đổi với lane khác nếu có thể.
+        // Neu bus dau tien o garage trung mau voi mau xe o parking bus thi doi di neu co the
         for (int i = 0; i < laneCount; i++)
         {
             int garageIndex = laneCount + i;
@@ -1303,7 +1264,6 @@ public class BusStation : MonoBehaviour
         }
 
         // Pha 1 : spawn tai vi tri parking
-
         for (int i = 0; i < laneCount && ticketIndex < ticketQueue.Count; i++)
         {
             BusLane lane = busLanes[i];
@@ -1317,7 +1277,6 @@ public class BusStation : MonoBehaviour
         }
 
         // Pha 2 : Spawn bus con lai chia deu (round-robin) vao garage cua tung lane
-
         int[] garaFillIndex = new int[laneCount];
 
         while(ticketIndex < ticketQueue.Count)
@@ -1396,7 +1355,6 @@ public class BusStation : MonoBehaviour
         List<BusTicket> garageTickets = new();
 
         // Bus dau tien cua moi mau -> parking
-
         foreach (Queue<BusTicket> q in perColorQueues)
         {
             if(q.Count > 0)
@@ -1420,11 +1378,9 @@ public class BusStation : MonoBehaviour
                 }
             }
         }
-
         parkingTickets.AddRange(garageTickets);
 
         return parkingTickets;
-
     }
 
     Bus SpawnBus(BusTicket ticket,Vector3 position,Transform parent)
@@ -1438,29 +1394,7 @@ public class BusStation : MonoBehaviour
         return bus;
     }
 
-    void Shuffle<T>(List<T> list)
-    {
-        for(int i = list.Count - 1; i > 0; i--)
-        {
-            int j = Random.Range(0, i + 1);
-
-            (list[i], list[j]) = (list[j], list[i]);
-        }
-    }
-
-    public void RegisterParkingBus(Bus bus)
-    {
-        if (!parkingBusList.Contains(bus))
-        {
-            parkingBusList.Add(bus);
-            bus.targetNode = PassengerGrid.Instance.GetNearestNode(bus.transform.position);
-        }
-    }
-
-    public void UnRegisterParkingBus(Bus bus)
-    {
-        parkingBusList.Remove(bus);
-    }
+ 
 
     public Bus GetNearestBusByColor(PassengerColor color, Vector3 fromPosition)
     {
@@ -1501,6 +1435,7 @@ public class BusStation : MonoBehaviour
 
         return null;
     }
+
     /// <summary>
     /// Get the number of available spaces in the parking lane of the corresponding color.
     /// </summary>
@@ -1541,10 +1476,7 @@ public class BusStation : MonoBehaviour
         int excess = committed - remaining;
         if (excess <= 0) return;
 
-        // Cắt từ CUỐI hàng garage trước - bus này chưa ai đang hướng tới, hủy an toàn nhất.
-        // QUAN TRỌNG: chỉ hủy NGUYÊN bus khi toàn bộ ghế trống của nó đều là dư thừa
-        // (seat <= excess). Nếu seat > excess, nghĩa là bus này vẫn cần thiết để chở
-        // phần passenger còn lại -> chỉ GIẢM capacity đúng bằng phần dư, không phá cả bus.
+        // Passenger di vao wildcardbus -> bus cung mau o cuoi garage se tru dan di so luong bang so luong len wildcard 
         foreach (var lane in busLanes)
         {
             for (int i = lane.garageBuses.Count - 1; i >= 1 && excess > 0; i--)
@@ -1556,15 +1488,14 @@ public class BusStation : MonoBehaviour
 
                 if (seat <= excess)
                 {
-                    // Toàn bộ bus này là dư thừa -> xóa hẳn
+                    // So luong len wildcard > seat cua xe =>  xoa han bus
                     lane.garageBuses.RemoveAt(i);
                     Destroy(bus.gameObject);
                     excess -= seat;
                 }
                 else
                 {
-                    // Chỉ một phần capacity là dư thừa -> giảm capacity, GIỮ LẠI bus
-                    // vì nó vẫn cần chở (seat - excess) passenger còn lại của màu này
+                    // So luong len wildcard < seat cua xe => tru di so hanh khach kia 
                     bus.SetCapacity(seat - excess);
                     excess = 0;
                 }
@@ -1573,7 +1504,7 @@ public class BusStation : MonoBehaviour
             lane.RefreshGaragePositions();
         }
 
-        // Nếu vẫn còn dư VÀ remaining đã thật sự về 0 -> ép bus đang đậu (nếu có) rời sớm
+        // Neu van con du va remaining ve 0 -> ep bus dang dau ( neu co ) roi ben
         if (excess > 0 && remaining == 0)
         {
             foreach (var bus in parkingBusList.ToList())
@@ -1609,6 +1540,7 @@ public class BusTrigger : MonoBehaviour
 
         if (passenger == null) return;
 
+        // Cho phep ko cung mua nhay len wildcard bus
         if (bus.isWildcard)
         {
             if (!BusStation.instance.CanWildcardAccept(passenger.PassengerColor)) return;
@@ -1626,24 +1558,701 @@ public class BusTrigger : MonoBehaviour
 
 
 ########################################
-FILE: Assets/Scripts/Manager/GameManager.cs
+FILE: Assets/Scripts/Level/LevelConfig.cs
 ########################################
 
 using UnityEngine;
 
-public class GameManager : MonoBehaviour
+[CreateAssetMenu(fileName = "LevelConfig", menuName = "Scriptable Objects/LevelConfig")]
+public class LevelConfig : ScriptableObject
 {
-     void Start()
-       {
-       		 
-        }
-
-     void Update()
-       {
-       		 
-        }
+    public int levelNumber;
+    public Texture2D layoutImage;
+    public int coinRewards = 40;
 }
 
+
+
+########################################
+FILE: Assets/Scripts/Level/LevelManager.cs
+########################################
+
+using System.Collections.Generic;
+using UnityEngine;
+
+public class LevelManager : MonoBehaviour
+{
+    public static LevelManager Instance;
+
+    [Header("Level Configs")]
+    [SerializeField] private List<LevelConfig> allLevels;
+
+    private LevelConfig currentLevelConfig;
+
+    private void Awake()
+    {
+        if (Instance == null)
+        {
+            Instance = this;
+        }
+        else
+        {
+            Destroy(gameObject);
+        }
+
+        DontDestroyOnLoad(gameObject);
+    }
+
+    private void Start()
+    {
+        LoadCurrentLevel();
+    }
+
+    public void LoadCurrentLevel()
+    {
+        int currentLevelNum = GameDataManager.Instance.GetCurrentLevel();
+
+        if (currentLevelNum - 1 < allLevels.Count)
+        {
+            currentLevelConfig = allLevels[currentLevelNum - 1];
+            Debug.Log($"Loaded Level {currentLevelNum}: {currentLevelConfig.name}");
+        }
+        else
+        {
+            Debug.LogError($"Level {currentLevelNum} chưa được cấu hình trong LevelManager! (Vượt quá danh sách)");
+            // Nếu muốn vòng lặp lại từ đầu:
+            // currentLevelConfig = allLevels[0];
+        }
+    }
+
+    public LevelConfig GetCurrentLevelConfig()
+    {
+        if (currentLevelConfig == null) LoadCurrentLevel();
+        return currentLevelConfig;
+    }
+}
+
+
+
+########################################
+FILE: Assets/Scripts/Manager/GameDataManager.cs
+########################################
+
+using System;
+using UnityEngine;
+
+public class GameDataManager : MonoBehaviour
+{
+    public static GameDataManager Instance;
+
+    [Header("Keys")]
+    private const string COIN_KEY = "Player_Coin";
+    private const string HEART_KEY = "Player_Heart";
+    private const string HEART_UPDATE_TIME_KEY = "Heart_Update_Time";
+    private const string LEVEL_KEY = "Current_Level";
+
+    // Settings keys
+    private const string MUSIC_ON_KEY = "Music_On";
+    private const string SOUND_ON_KEY = "Sound_On";
+    private const string VIBRATE_ON_KEY = "Vibrate_On";
+
+    private const int MAX_HEART = 5;
+    private const int HEART_RECOVER_TIME = 900; // 15 minutes = 900 giây
+
+
+    private void Awake()
+    {
+        if (Instance == null)
+        {
+            Instance = this;
+        }
+        else
+        {
+            Destroy(gameObject);
+        }
+
+        DontDestroyOnLoad(gameObject);
+
+        InitData();
+    }
+
+    private void InitData()
+    {
+        if (!PlayerPrefs.HasKey(HEART_KEY))
+        {
+            PlayerPrefs.SetInt(HEART_KEY, MAX_HEART);
+            PlayerPrefs.SetString(HEART_UPDATE_TIME_KEY, DateTime.UtcNow.ToString());
+        }
+
+        if (!PlayerPrefs.HasKey(COIN_KEY)) PlayerPrefs.SetInt(COIN_KEY, 0);
+        if (!PlayerPrefs.HasKey(LEVEL_KEY)) PlayerPrefs.SetInt(LEVEL_KEY, 1);
+        if (!PlayerPrefs.HasKey(MUSIC_ON_KEY)) PlayerPrefs.SetInt(MUSIC_ON_KEY, 1);
+        if (!PlayerPrefs.HasKey(SOUND_ON_KEY)) PlayerPrefs.SetInt(SOUND_ON_KEY, 1);
+        if (!PlayerPrefs.HasKey(VIBRATE_ON_KEY)) PlayerPrefs.SetInt(VIBRATE_ON_KEY, 1);
+    }
+
+    // Coin system
+    public int GetCoin() => PlayerPrefs.GetInt(COIN_KEY,0);
+
+    public void AddCoin(int amount)
+    {
+        int current = GetCoin();
+
+        PlayerPrefs.SetInt(COIN_KEY, current + amount);
+    }
+
+    public bool SpendCoin(int amount)
+    {
+        int current = GetCoin();
+
+        if(current > amount)
+        {
+            PlayerPrefs.SetInt(COIN_KEY,current - amount);
+            return true;
+        }
+
+        return false;
+    }
+
+    // Heart System ( real time)
+    public int GetHearts()
+    {
+        int currentHeart = PlayerPrefs.GetInt(HEART_KEY, MAX_HEART);
+
+        if(currentHeart >= MAX_HEART)
+        {
+            return MAX_HEART;
+        }
+
+        DateTime lastUpdate = DateTime.Parse(PlayerPrefs.GetString(HEART_UPDATE_TIME_KEY));
+
+        TimeSpan elapsed = DateTime.UtcNow - lastUpdate;
+
+        int addHearts = Mathf.FloorToInt((float)elapsed.TotalSeconds / HEART_RECOVER_TIME);
+
+        currentHeart = Mathf.Min(MAX_HEART, currentHeart + addHearts);
+
+
+        // cap nhat lai thoi gian neu co tim moi duoc sinh ra
+
+        if(addHearts > 0 && currentHeart < MAX_HEART)
+        {
+            TimeSpan newRemainTime = elapsed - TimeSpan.FromSeconds(addHearts * HEART_RECOVER_TIME); // lay ra phan du thoi gian sau khi da hoi lai tim
+
+            PlayerPrefs.SetString(HEART_UPDATE_TIME_KEY, (DateTime.UtcNow - newRemainTime).ToString()); // thoi gian can hoi se giam xuong
+        }
+        else if(currentHeart >= MAX_HEART)
+        {
+            PlayerPrefs.SetString(HEART_UPDATE_TIME_KEY,DateTime.UtcNow.ToString());
+        }
+
+        PlayerPrefs.SetInt(HEART_KEY, currentHeart);
+        return currentHeart;
+    }
+
+    public float GetHeartRecoveryRemainingSeconds()
+    {
+        int currentHeart = PlayerPrefs.GetInt(HEART_KEY, MAX_HEART);
+
+        if (currentHeart >= MAX_HEART)
+            return 0f;
+
+        DateTime lastUpdate = DateTime.Parse(PlayerPrefs.GetString(HEART_UPDATE_TIME_KEY));
+        TimeSpan elapsed = DateTime.UtcNow - lastUpdate;
+
+        // Số tim đã được cộng thêm kể từ lần cuối lưu
+        int addedHearts = Mathf.FloorToInt((float)elapsed.TotalSeconds / HEART_RECOVER_TIME);
+        if (addedHearts >= MAX_HEART - currentHeart) return 0f; // Đã đầy
+
+        // Thời gian đã trôi qua kể từ lần sinh tim gần nhất
+        float remainder = (float) elapsed.TotalSeconds % HEART_RECOVER_TIME;
+        float remaining = HEART_RECOVER_TIME - remainder;
+        return Mathf.Max(0, remaining);
+    }
+
+    public void UseHeart()
+    {
+        int current = GetHearts(); // goi getheart se tu dong tinh toan thoi gian hoi
+
+        if(current > 0)
+        {
+            PlayerPrefs.SetInt(HEART_KEY, current - 1);
+            PlayerPrefs.SetString(HEART_UPDATE_TIME_KEY, DateTime.UtcNow.ToString());
+        }
+    }
+
+    //=============Level System=================
+    public int GetCurrentLevel() => PlayerPrefs.GetInt(LEVEL_KEY, 1);
+
+    public void IncreaseLevel()
+    {
+        int level = GetCurrentLevel();
+
+        PlayerPrefs.SetInt(LEVEL_KEY, level + 1);
+    }
+
+    //============Setting System==================
+    public bool IsMusicOn() => PlayerPrefs.GetInt(MUSIC_ON_KEY,1) == 1;
+    public bool IsSoundOn() => PlayerPrefs.GetInt(SOUND_ON_KEY,1) == 1;
+    public bool IsVibrateOn() => PlayerPrefs.GetInt(VIBRATE_ON_KEY,1) == 1;
+
+    public void SetMusic(bool isOn) { PlayerPrefs.SetInt(MUSIC_ON_KEY, isOn ? 1 : 0); }
+    public void SetSound(bool isOn) { PlayerPrefs.SetInt(SOUND_ON_KEY, isOn ? 1 : 0); }
+    public void SetVibrate(bool isOn) { PlayerPrefs.SetInt(VIBRATE_ON_KEY, isOn ? 1 : 0); }
+}
+
+
+
+########################################
+FILE: Assets/Scripts/Manager/GameManager.cs
+########################################
+
+using UnityEngine;
+using UnityEngine.SceneManagement;
+
+public class GameManager : MonoBehaviour
+{
+    [Header("Win UI")]
+    [SerializeField] GameObject winPanel;
+    [SerializeField] WinManager winManager;
+
+    private bool isGameFinished = false;
+
+    void Start()
+    {
+        winPanel.SetActive(false);
+        InvokeRepeating("CheckWinCondition", 1f, 1f);
+    }
+
+    void CheckWinCondition()
+    {
+        if (isGameFinished) return;
+
+        // Ko con passengers nao
+        bool noPassengers = PassengerManager.Instance.passengers.Count == 0;
+
+       // Tat ca xe deu da den Goal ( vi tri cuoi cung sau khi xe roi parking)
+        bool noBuses = BusStation.instance.allBuses.Count == 0;
+
+        if (noPassengers && noBuses)
+        {
+            TriggerWin();
+        }
+    }
+    void TriggerWin()
+    {
+        isGameFinished = true;
+        CancelInvoke("CheckWinCondition");
+
+        winPanel.SetActive(true);
+        winManager.OnLevelWon();
+
+        SoundManager.Instance.PlaySFX(SoundManager.Instance.winSFX);
+    }
+}
+
+
+########################################
+FILE: Assets/Scripts/Manager/LoadingSceneController.cs
+########################################
+
+using System.Collections;
+using UnityEngine;
+using UnityEngine.SceneManagement;
+
+public class LoadingSceneController : MonoBehaviour
+{
+    [SerializeField] private float minLoadTime = 2f;
+
+    private void Start()
+    {
+        StartCoroutine(LoadSceneRoutine());
+    }
+
+    IEnumerator LoadSceneRoutine()
+    {
+        // Loading scene chay time
+        yield return new WaitForSeconds(minLoadTime);
+
+        // Check state : Game -> Menu or Menu -> Game
+        // Use a static string to save purpose loading scene
+        string targetScene = TargetSceneHandler.TargetScene;
+        AsyncOperation operation = SceneManager.LoadSceneAsync(targetScene);
+    }
+
+    public static class TargetSceneHandler
+    {
+        public static string TargetScene = "MenuScene";
+    }
+}
+
+
+
+########################################
+FILE: Assets/Scripts/Manager/SettingPanelController.cs
+########################################
+
+using UnityEngine;
+using UnityEngine.SceneManagement;
+using UnityEngine.UI;
+using static LoadingSceneController;
+
+public class SettingsPanelController : MonoBehaviour
+{
+    [Header("Setting Toggles")]
+    public Toggle musicToggle;
+    public Toggle soundToggle;
+    public Toggle vibrateToggle;
+
+    private void OnEnable()
+    {
+   
+        musicToggle.isOn = GameDataManager.Instance.IsMusicOn();
+        soundToggle.isOn = GameDataManager.Instance.IsSoundOn();
+        vibrateToggle.isOn = GameDataManager.Instance.IsVibrateOn();
+
+        musicToggle.onValueChanged.AddListener(OnMusicToggleChanged);
+        soundToggle.onValueChanged.AddListener(OnSoundToggleChanged);
+        vibrateToggle.onValueChanged.AddListener(OnVibrateToggleChanged);
+    }
+
+    private void OnDisable()
+    {
+
+        musicToggle.onValueChanged.RemoveListener(OnMusicToggleChanged);
+        soundToggle.onValueChanged.RemoveListener(OnSoundToggleChanged);
+        vibrateToggle.onValueChanged.RemoveListener(OnVibrateToggleChanged);
+    }
+
+    private void OnMusicToggleChanged(bool isOn)
+    {
+        GameDataManager.Instance.SetMusic(isOn);
+        SoundManager.Instance.UpdateMusicState();
+    }
+
+    private void OnSoundToggleChanged(bool isOn)
+    {
+        GameDataManager.Instance.SetSound(isOn);
+        SoundManager.Instance.UpdateSoundState();
+    }
+
+    private void OnVibrateToggleChanged(bool isOn)
+    {
+        GameDataManager.Instance.SetVibrate(isOn);
+        // Ở đây bạn có thể tắt/bật thư viện Vibrate nếu bạn dùng
+    }
+
+    public void OnResetLevelButton()
+    {
+        GameDataManager.Instance.UseHeart();
+        TargetSceneHandler.TargetScene = "GameScene";
+        SceneManager.LoadScene("LoadingScene");
+    }
+
+    public void OnExitButton()
+    {
+        GameDataManager.Instance.UseHeart();
+        TargetSceneHandler.TargetScene = "MenuScene";
+        SceneManager.LoadScene("LoadingScene");
+    }
+}
+
+
+########################################
+FILE: Assets/Scripts/Manager/SoundManager.cs
+########################################
+
+using UnityEngine;
+using UnityEngine.SceneManagement;
+
+public class SoundManager : MonoBehaviour
+{
+    public static SoundManager Instance;
+
+    [Header("Audio Sources")]
+    public AudioSource musicSource;
+    public AudioSource sfxSource;
+
+    [Header("Audio Clips")]
+    public AudioClip menuMusic;
+    public AudioClip gameMusic;
+    public AudioClip coinCollectSFX;
+    public AudioClip winSFX;
+
+    private void Awake()
+    {
+        if (Instance == null)
+        {
+            Instance = this;
+            DontDestroyOnLoad(gameObject);
+        }
+        else
+        {
+            Destroy(gameObject);
+        }
+    }
+
+    public void UpdateMusicState()
+    {
+        musicSource.mute = !GameDataManager.Instance.IsMusicOn();
+        UpdateSceneMusic(SceneManager.GetActiveScene().name);
+    }
+
+    public void UpdateSoundState()
+    {
+        sfxSource.mute = !GameDataManager.Instance.IsSoundOn();
+    }
+
+    public void UpdateSceneMusic(string sceneName)
+    {
+        if(sceneName == "MenuScene")
+        {
+            PlayMusic(menuMusic);
+        }
+        else if(sceneName =="GameScene")
+        {
+            PlayMusic(gameMusic);
+        }
+    }
+
+    public void PlayMusic(AudioClip clip)
+    {
+        if (musicSource.clip == clip && musicSource.isPlaying)
+        {
+            return;
+        }
+
+        musicSource.clip = clip;
+        musicSource.Play();    
+    }
+
+    public void PlaySFX(AudioClip clip)
+    {
+        if (!GameDataManager.Instance.IsSoundOn()) return;
+
+        sfxSource.PlayOneShot(clip);
+    }
+}
+
+
+
+########################################
+FILE: Assets/Scripts/Manager/UIManagerr.cs
+########################################
+
+using System.Collections;
+using TMPro;
+using UnityEngine;
+using UnityEngine.SceneManagement;
+using static LoadingSceneController;
+
+public class UIManagerr : MonoBehaviour
+{
+    [Header("Game Scene UI")]
+    [SerializeField] GameObject settingPanel;
+
+    [Header("Menu Scene UI")]
+    [SerializeField] TextMeshProUGUI coinTextUI;
+    [SerializeField] TextMeshProUGUI heartTextUI;       
+    [SerializeField] TextMeshProUGUI heartTimerTextUI;  // Thoi gian hoi tim : 15:00
+    [SerializeField] TextMeshProUGUI levelPlayButtonText;
+    [SerializeField] GameObject heartFullText;  // "FULL"
+
+    private Coroutine heartTimerCoroutine;
+
+    private void Start()
+    {
+        if (SceneManager.GetActiveScene().name == "MenuScene")
+        {
+            UpdateMenuUI();
+            StartHeartTimerCoroutine();
+        }
+    }
+
+    public void UpdateMenuUI()
+    {
+        int coin = GameDataManager.Instance.GetCoin();
+        int heart = GameDataManager.Instance.GetHearts();
+
+        coinTextUI.text = coin.ToString();
+
+        int currentLevel = GameDataManager.Instance.GetCurrentLevel();
+        levelPlayButtonText.text = $"LEVEL {currentLevel}";
+
+        bool isFull = heart >= 5;
+
+        // An so tim neu day, hien FULL. Hien tim neu chua day, an full
+        heartTextUI.gameObject.SetActive(!isFull);
+        heartFullText.SetActive(isFull);
+        heartTextUI.text = heart.ToString();
+
+        UpdateHeartTimer();
+    }
+
+    private void UpdateHeartTimer()
+    {
+        int heart = GameDataManager.Instance.GetHearts(); 
+
+        if (heart >= 5)
+        {
+            heartTimerTextUI.text = "FULL";
+        }
+        else
+        {
+            float remaining = GameDataManager.Instance.GetHeartRecoveryRemainingSeconds();
+            if (remaining <= 0)
+            {
+                heartTimerTextUI.text = "00:00";
+            }
+            else
+            {
+                int minutes = Mathf.FloorToInt(remaining / 60f);
+                int seconds = Mathf.FloorToInt(remaining % 60f);
+                heartTimerTextUI.text = $"{minutes:00}:{seconds:00}";
+            }
+        }
+    }
+
+    public void OnPlayButton()
+    {
+        TargetSceneHandler.TargetScene = "GameScene";
+        SceneManager.LoadScene("LoadingScene");
+    }
+
+    public void OnOpenSetting()
+    {
+        settingPanel.SetActive(true);
+    }
+
+    public void OnCloseSetting()
+    {
+        settingPanel.SetActive(false);
+    }
+
+    void StartHeartTimerCoroutine()
+    {
+        if (heartTimerCoroutine != null) StopCoroutine(heartTimerCoroutine);
+        heartTimerCoroutine = StartCoroutine(HeartTimerRoutine());
+    }
+
+    IEnumerator HeartTimerRoutine()
+    {
+        while (true)
+        {
+            yield return new WaitForSeconds(1f);
+            UpdateMenuUI(); // Cap nhat tim va timer moi giay
+        }
+    }
+}
+
+
+########################################
+FILE: Assets/Scripts/Manager/WinManager.cs
+########################################
+
+using DG.Tweening;
+using System.Collections;
+using TMPro;
+using UnityEngine;
+using UnityEngine.SceneManagement;
+using UnityEngine.UI;
+using static LoadingSceneController;
+
+public class WinManager : MonoBehaviour
+{
+    [Header("UI Components")]
+    [SerializeField] Button continueButton;
+    [SerializeField] GameObject busDisplay;
+    [SerializeField] TextMeshProUGUI coinRewardText; 
+    [SerializeField] Transform coinSpawnPoint;
+    [SerializeField] Transform coinTargetIcon;
+    [SerializeField] GameObject coinPrefab;
+
+    [Header("Reward Settings")]
+    [SerializeField] private int baseCoinReward = 120;
+
+    public void OnLevelWon()
+    {
+        continueButton.gameObject.SetActive(true);
+        busDisplay.SetActive(true);
+
+        int reward = baseCoinReward;
+        if (LevelManager.Instance != null && LevelManager.Instance.GetCurrentLevelConfig() != null)
+        {
+            reward = LevelManager.Instance.GetCurrentLevelConfig().coinRewards;
+        }
+        coinRewardText.text = "+" + reward; 
+    }
+
+    public void OnContinueButton()
+    {
+        continueButton.gameObject.SetActive(false);
+        busDisplay.SetActive(false);
+        StartCoroutine(CoinCollectionRoutine());
+    }
+
+    IEnumerator CoinCollectionRoutine()
+    {
+        int coinReward = baseCoinReward;
+        if (LevelManager.Instance != null && LevelManager.Instance.GetCurrentLevelConfig() != null)
+        {
+            coinReward = LevelManager.Instance.GetCurrentLevelConfig().coinRewards;
+        }
+
+        // Tìm Canvas chính trong Scene để làm cha cho Coin UI
+        Canvas mainCanvas = FindAnyObjectByType<Canvas>();
+
+        int currentAdded = 0;
+        while (currentAdded < coinReward)
+        {
+            // 1. Sinh Coin vào trong Canvas (KHÔNG dùng World Position ở đây)
+            GameObject coin = Instantiate(coinPrefab, mainCanvas.transform);
+            RectTransform coinRect = coin.GetComponent<RectTransform>();
+
+            // 2. Chuyển tọa độ 3D của điểm Spawn thành tọa độ UI (Screen to Local)
+            Vector3 screenPos = Camera.main.WorldToScreenPoint(coinSpawnPoint.position);
+            Vector2 localPos;
+            RectTransformUtility.ScreenPointToLocalPointInRectangle(
+                mainCanvas.GetComponent<RectTransform>(),
+                screenPos,
+                mainCanvas.worldCamera,
+                out localPos
+            );
+
+            // 3. Gán vị trí UI chính xác
+            coinRect.anchoredPosition = localPos;
+
+            // 4. Bay coin về Icon (Dùng DOMove cho RectTransform)
+            coinRect.DOAnchorPos(coinTargetIcon.GetComponent<RectTransform>().anchoredPosition, 0.6f)
+                .SetEase(Ease.InBack)
+                .OnComplete(() => Destroy(coin));
+
+            currentAdded++;
+            yield return new WaitForSeconds(0.1f);
+        }
+
+        OnCoinFlyingComplete();
+    }
+
+    void OnCoinFlyingComplete()
+    {
+        // Them coin
+        int coinReward = baseCoinReward;
+        if (LevelManager.Instance != null && LevelManager.Instance.GetCurrentLevelConfig() != null)
+        {
+            coinReward = LevelManager.Instance.GetCurrentLevelConfig().coinRewards;
+        }
+        GameDataManager.Instance.AddCoin(coinReward);
+
+        // Tang level
+        GameDataManager.Instance.IncreaseLevel();
+        // Luu du lieu
+        PlayerPrefs.Save();
+        // Chuyen scene
+        TargetSceneHandler.TargetScene = "GameScene";
+        SceneManager.LoadScene("LoadingScene");
+    }
+}
 
 
 ########################################
@@ -2263,7 +2872,6 @@ public class Passenger : MonoBehaviour
         // Giữ lại cho backward compatibility nhưng có thể gặp lỗi nếu gọi riêng lẻ
         // Nên dùng MoveGroup() thay thế
         MoveInternal();
-        Debug.Log("Move");
     }
 
     void MoveInternal()
@@ -2500,6 +3108,12 @@ public class Passenger : MonoBehaviour
 
         return result;
     }
+
+    private void OnDestroy()
+    {
+        // Hủy mọi tween (như DOJump, Suction, v.v...) trước khi passenger bị phá hủy
+        transform.DOKill();
+    }
 }
 
 
@@ -2675,7 +3289,7 @@ public class PassengerManager : MonoBehaviour
 {
     public static PassengerManager Instance;
 
-    [HideInInspector] List<Passenger> passengers = new List<Passenger>();
+    [HideInInspector] public List<Passenger> passengers = new List<Passenger>();
 
     private void Awake()
     {
@@ -2887,7 +3501,7 @@ public class PassengerManager : MonoBehaviour
 
         ComputeCenter(out float centerRow, out float centerCol);
 
-        // Cang GAN tam (khoang cach nho) -> cang "o sau ben trong" -> cang uu tien
+        // cang gan tam cua anh => khoang cach cang nho thi cang duoc uu tien lay
         blocked = blocked.OrderBy(p => DistanceFromCenter(p, centerRow, centerCol)).ToList();
         reachable = reachable.OrderBy(p => DistanceFromCenter(p, centerRow, centerCol)).ToList();
 
@@ -3072,18 +3686,23 @@ public class PassengerSpawnAreas : MonoBehaviour
     int columns;
     int rows;
 
+    // Sửa trong file PassengerSpawnAreas.cs
     private void Start()
     {
         rows = Mathf.FloorToInt(height / spaceZ);
         columns = Mathf.FloorToInt(width / spaceX);
 
-        // >>> THAY DOI: bat dau ==========================================
-        // Truoc day chi goi thang SpawnPassengers(), gio re nhanh theo layoutImage
+        // >>> BẮT ĐẦU SỬA: Lấy Layout động từ LevelManager
+        if (LevelManager.Instance != null && LevelManager.Instance.GetCurrentLevelConfig() != null)
+        {
+            layoutImage = LevelManager.Instance.GetCurrentLevelConfig().layoutImage;
+        }
+        // >>> KẾT THÚC SỬA
+
         if (layoutImage != null)
             SpawnFromImage();
         else
             SpawnPassengers();
-        // >>> THAY DOI: ket thuc ==========================================
     }
 
 
@@ -3452,8 +4071,6 @@ public class RVOAgent : MonoBehaviour
         float maxSafeRadius = cell * 0.4f;
         if (radius > maxSafeRadius)
         {
-            //Debug.LogWarning($"[RVOAgent] radius ({radius}) qua lon so voi cellSize ({cell}), " +
-                              //$"tu dong giam xuong {maxSafeRadius} de tranh 2 agent o o ke nhau bi tinh nham la dang cham nhau.");
             radius = maxSafeRadius;
         }
     }

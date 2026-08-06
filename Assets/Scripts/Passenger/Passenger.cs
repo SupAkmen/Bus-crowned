@@ -370,7 +370,6 @@ public class Passenger : MonoBehaviour
         // Giữ lại cho backward compatibility nhưng có thể gặp lỗi nếu gọi riêng lẻ
         // Nên dùng MoveGroup() thay thế
         MoveInternal();
-        Debug.Log("Move");
     }
 
     void MoveInternal()
@@ -606,6 +605,12 @@ public class Passenger : MonoBehaviour
         }
 
         return result;
+    }
+
+    private void OnDestroy()
+    {
+        // Hủy mọi tween (như DOJump, Suction, v.v...) trước khi passenger bị phá hủy
+        transform.DOKill();
     }
 }
 

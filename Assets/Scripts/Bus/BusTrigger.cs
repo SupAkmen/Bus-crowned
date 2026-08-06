@@ -14,6 +14,7 @@ public class BusTrigger : MonoBehaviour
 
         if (passenger == null) return;
 
+        // Cho phep ko cung mua nhay len wildcard bus
         if (bus.isWildcard)
         {
             if (!BusStation.instance.CanWildcardAccept(passenger.PassengerColor)) return;

@@ -39,8 +39,6 @@ public class RVOAgent : MonoBehaviour
         float maxSafeRadius = cell * 0.4f;
         if (radius > maxSafeRadius)
         {
-            //Debug.LogWarning($"[RVOAgent] radius ({radius}) qua lon so voi cellSize ({cell}), " +
-                              //$"tu dong giam xuong {maxSafeRadius} de tranh 2 agent o o ke nhau bi tinh nham la dang cham nhau.");
             radius = maxSafeRadius;
         }
     }

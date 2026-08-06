@@ -17,7 +17,5 @@ public class HintBooster : MonoBehaviour
         {
             p.SetHighLight(true, highlightDuration);
         }
-
-        Debug.Log("Hint booster");
     }
 }

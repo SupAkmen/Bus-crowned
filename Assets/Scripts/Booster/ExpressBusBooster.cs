@@ -47,7 +47,6 @@ public class ExpressBusBooster : MonoBehaviour
 
         isSelecting = true;
         SetHighLight(true);
-        Debug.Log("ExpressBus Booster");
     }
 
     void EndSelection()

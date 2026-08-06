@@ -7,7 +7,7 @@ public class PassengerManager : MonoBehaviour
 {
     public static PassengerManager Instance;
 
-    [HideInInspector] List<Passenger> passengers = new List<Passenger>();
+    [HideInInspector] public List<Passenger> passengers = new List<Passenger>();
 
     private void Awake()
     {
@@ -219,7 +219,7 @@ public class PassengerManager : MonoBehaviour
 
         ComputeCenter(out float centerRow, out float centerCol);
 
-        // Cang GAN tam (khoang cach nho) -> cang "o sau ben trong" -> cang uu tien
+        // cang gan tam cua anh => khoang cach cang nho thi cang duoc uu tien lay
         blocked = blocked.OrderBy(p => DistanceFromCenter(p, centerRow, centerCol)).ToList();
         reachable = reachable.OrderBy(p => DistanceFromCenter(p, centerRow, centerCol)).ToList();
 
