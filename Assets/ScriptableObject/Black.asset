@@ -9,9 +9,9 @@ MonoBehaviour:
   m_GameObject: {fileID: 0}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 05e2878f99102ae48b71c5bcf94de353, type: 3}
-  m_Name: Level 1
+  m_Script: {fileID: 11500000, guid: a62fe2446551de748ae7a9ddaf40c99e, type: 3}
+  m_Name: Black
   m_EditorClassIdentifier: 
-  levelNumber: 1
-  layoutImage: {fileID: 2800000, guid: dcb27065a8985f84f8dbf30f79cf9ae4, type: 3}
-  coinRewards: 40
+  colorName: Black
+  material: {fileID: 2100000, guid: 5a139fd0897081c44a5d54dcd9eafd09, type: 2}
+  pixelColor: {r: 0, g: 0, b: 0, a: 1}
