@@ -232,6 +232,7 @@ MonoBehaviour:
   bodyRenderer: {fileID: 7099025055480748611}
   passengerColor: {fileID: 0}
   isWildcard: 0
+  wildcardLeavePath: []
   highlightIndicator: {fileID: 8771243735850669777}
 --- !u!65 &-6198196884501290273
 BoxCollider:
@@ -531,6 +532,10 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 4189502175659282119, guid: 8d0e2daa007f4a34ab3ee8405b46359a, type: 3}
       propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4209772555335397289, guid: 8d0e2daa007f4a34ab3ee8405b46359a, type: 3}
+      propertyPath: m_CastShadows
       value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 4209772555335397289, guid: 8d0e2daa007f4a34ab3ee8405b46359a, type: 3}

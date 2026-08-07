@@ -40,4 +40,10 @@ public class GameManager : MonoBehaviour
 
         SoundManager.Instance.PlaySFX(SoundManager.Instance.winSFX);
     }
+
+    public void ForceWin()
+    {
+        if (isGameFinished) return;
+        TriggerWin();
+    }
 }

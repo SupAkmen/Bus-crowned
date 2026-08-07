@@ -13,5 +13,5 @@ MonoBehaviour:
   m_Name: Level 1
   m_EditorClassIdentifier: 
   levelNumber: 1
-  layoutImage: {fileID: 2800000, guid: 79400bc208461b04cbdb2173428c9a27, type: 3}
+  layoutImage: {fileID: 2800000, guid: 84df6cb3f75e7354aafff6d9e853177f, type: 3}
   coinRewards: 40

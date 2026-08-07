@@ -20,12 +20,14 @@ public class SoundManager : MonoBehaviour
         if (Instance == null)
         {
             Instance = this;
-            DontDestroyOnLoad(gameObject);
+            
         }
         else
         {
             Destroy(gameObject);
         }
+
+        DontDestroyOnLoad(gameObject);
     }
 
     public void UpdateMusicState()

@@ -466,12 +466,10 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   bus: {fileID: 355782339}
   jumpSpeed: 3
-  jumpHeight: 0.2
+  jumpHeight: 1
   road1: {fileID: 2127168010}
   road2: {fileID: 2135916044}
-  roadSpeed: 5
-  leftBoudary: -10
-  rightBoudary: 10
+  roadSpeed: 400
 --- !u!1 &965157903
 GameObject:
   m_ObjectHideFlags: 0
@@ -503,10 +501,10 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   musicSource: {fileID: 976150604}
   sfxSource: {fileID: 988684703}
-  menuMusic: {fileID: 0}
-  gameMusic: {fileID: 0}
-  coinCollectSFX: {fileID: 0}
-  winSFX: {fileID: 0}
+  menuMusic: {fileID: 8300000, guid: 4353af3b58b1a3046a84e1ccdf0ba702, type: 3}
+  gameMusic: {fileID: 8300000, guid: 5845885d53e45cd44985da47816db751, type: 3}
+  coinCollectSFX: {fileID: 8300000, guid: f6b104ddeca34314c9d293c3a60e3910, type: 3}
+  winSFX: {fileID: 8300000, guid: 720ae49484e785a468437d8650f04058, type: 3}
 --- !u!4 &965157905
 Transform:
   m_ObjectHideFlags: 0

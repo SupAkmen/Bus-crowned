@@ -211,6 +211,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   bodyRenderer: {fileID: 1008328108367650061}
+  visualColor: {r: 0, g: 0, b: 0, a: 0}
   rotationSpeed: 720
   highlightIndicator: {fileID: 797770425175081771}
   targetBus: {fileID: 0}
@@ -309,6 +310,10 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 349002784900378630, guid: d620ee1cf17bc08418aa279ba32fa71f, type: 3}
       propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 3178214683682572079, guid: d620ee1cf17bc08418aa279ba32fa71f, type: 3}
+      propertyPath: m_CastShadows
       value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 3178214683682572079, guid: d620ee1cf17bc08418aa279ba32fa71f, type: 3}
